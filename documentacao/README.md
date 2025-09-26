@@ -396,7 +396,7 @@ Este projeto foi desenvolvido para fins acadêmicos como Trabalho de Conclusão 
 
 ## 👨‍💻 **Autor**
 
-**Rafael** - TCC FinanMaster
+**Grupo 4** - TCC FinanMaster
 
 ## 📞 **Suporte**
 
