@@ -392,7 +392,7 @@ O frontend do FinanMaster foi completamente modernizado seguindo as melhores pr�
 
 ## 📝 **Licença**
 
-Este projeto foi desenvolvido para fins acadêmicos como Trabalho de Conclusão de Curso.
+Este projeto foi desenvolvido para fins acadêmicos como Trabalho de Conclusão de Curso do curso de Analise e desenvolvimento de Sistemas da Escola Técnica de Estadual (ETEC)
 
 ## 👨‍💻 **Autor**
 
@@ -400,7 +400,8 @@ Este projeto foi desenvolvido para fins acadêmicos como Trabalho de Conclusão 
 
 ## 📞 **Suporte**
 
-Para dúvidas ou suporte, entre em contato através do email: rafael@exemplo.com
+Para dúvidas ou suporte, entre em contato através dos emails: rafaeldasilvasiqueira@yahoo.com.br
+izaias.cf@outlook.com
 
 ---
 
