@@ -1,0 +1,24 @@
+[Unit]
+Description=FinanMaster Application
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/finanmaster-tcc
+Environment=PATH=/home/ubuntu/finanmaster-tcc/venv/bin
+Environment=FLASK_ENV=production
+ExecStart=/home/ubuntu/finanmaster-tcc/venv/bin/python app.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+
+# Logs
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=finanmaster
+
+[Install]
+WantedBy=multi-user.target

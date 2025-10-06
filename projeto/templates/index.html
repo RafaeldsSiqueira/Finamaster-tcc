@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanMaster - Dashboard Financeiro</title>
+    
+    <!-- Meta Tags -->
+    <meta name="description" content="FinanMaster - Sistema de gestão financeira pessoal com IA">
+    <meta name="theme-color" content="#3b82f6">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+</head>
+<body>
+    <!-- Top Navigation Header -->
+    <header class="top-header">
+        <div class="header-content">
+            <!-- Logo and Title -->
+            <div class="header-brand">
+                <div class="brand-logo">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="brand-info">
+                    <h1 class="brand-title">FinanMaster</h1>
+                    <p class="brand-subtitle">Gestão Financeira Inteligente</p>
+                </div>
+            </div>
+            
+            <!-- Horizontal Navigation -->
+            <nav class="top-nav">
+                <a href="#" class="nav-link active" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-link" data-section="transactions">
+                    <i class="fas fa-exchange-alt"></i>
+                    <span>Transações</span>
+                </a>
+                <a href="#" class="nav-link" data-section="budget">
+                    <i class="fas fa-piggy-bank"></i>
+                    <span>Orçamento</span>
+                </a>
+                <a href="#" class="nav-link" data-section="goals">
+                    <i class="fas fa-bullseye"></i>
+                    <span>Metas</span>
+                </a>
+                <a href="#" class="nav-link" data-section="ai-assistant">
+                    <i class="fas fa-robot"></i>
+                    <span>Assistente IA</span>
+                </a>
+                <a href="#" class="nav-link" data-section="reports">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Relatórios</span>
+                </a>
+                <a href="#" class="nav-link" data-section="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Configurações</span>
+                </a>
+            </nav>
+            
+            <!-- User Profile and Actions -->
+            <div class="header-actions">
+                <div class="user-profile">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">Usuário</div>
+                        <div class="user-status">Online</div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <button class="action-btn" title="Notificações">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                    <button class="action-btn" title="Buscar">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+                <!-- Dashboard Section -->
+                <div id="dashboard-section" class="content-section active">
+                    <div class="dashboard-header">
+                        <h2>Dashboard Financeiro</h2>
+                        <p class="text-muted">Visão geral das suas finanças</p>
+                    </div>
+
+                    <!-- Cards de Resumo -->
+                    <div class="row mb-5">
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="card summary-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div class="summary-icon saldo-icon">
+                                            <i class="fas fa-wallet"></i>
+                                        </div>
+                                        <div class="summary-trend positive">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <span>+2.5%</span>
+                                        </div>
+                                    </div>
+                                    <h6 class="summary-title">Saldo Total</h6>
+                                    <p class="summary-value text-saldo" id="saldo-total">R$ 0,00</p>
+                                    <small class="summary-description">Este mês</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="card summary-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div class="summary-icon receita-icon">
+                                            <i class="fas fa-arrow-up"></i>
+                                        </div>
+                                        <div class="summary-trend positive">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <span>+12.3%</span>
+                                        </div>
+                                    </div>
+                                    <h6 class="summary-title">Receitas</h6>
+                                    <p class="summary-value text-receita" id="receitas-total">R$ 0,00</p>
+                                    <small class="summary-description">Este mês</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="card summary-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div class="summary-icon despesa-icon">
+                                            <i class="fas fa-arrow-down"></i>
+                                        </div>
+                                        <div class="summary-trend negative">
+                                            <i class="fas fa-arrow-up"></i>
+                                            <span>+5.2%</span>
+                                        </div>
+                                    </div>
+                                    <h6 class="summary-title">Despesas</h6>
+                                    <p class="summary-value text-despesa" id="despesas-total">R$ 0,00</p>
+                                    <small class="summary-description">Este mês</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6 mb-4">
+                            <div class="card summary-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <div class="summary-icon economia-icon">
+                                            <i class="fas fa-chart-pie"></i>
+                                        </div>
+                                        <div class="summary-trend positive">
+                                            <i class="fas fa-percentage"></i>
+                                            <span>28.5%</span>
+                                        </div>
+                                    </div>
+                                    <h6 class="summary-title">Economia</h6>
+                                    <p class="summary-value text-success" id="economia-total">R$ 0,00</p>
+                                    <small class="summary-description">da receita</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráficos -->
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Fluxo de Caixa</h5>
+                                    <canvas id="cashFlowChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Distribuição de Despesas</h5>
+                                    <canvas id="expensesChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Transações Recentes -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Transações Recentes</h5>
+                                    <div class="table-responsive">
+                                        <table class="table table-dark">
+                                            <thead>
+                                                <tr>
+                                                    <th>Descrição</th>
+                                                    <th>Categoria</th>
+                                                    <th>Data</th>
+                                                    <th>Valor</th>
+                                                    <th>Tipo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="recent-transactions">
+                                                <!-- Dados serão inseridos via JavaScript -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transações Section -->
+                <div id="transactions-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Gerenciar Transações</h2>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                            <i class="fas fa-plus"></i> Nova Transação
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <input type="text" class="form-control" id="search-transaction" placeholder="Buscar transação...">
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filter-category">
+                                        <option value="">Todas as categorias</option>
+                                        <option>Alimentação</option>
+                                        <option>Transporte</option>
+                                        <option>Moradia</option>
+                                        <option>Lazer</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select class="form-select" id="filter-type">
+                                        <option value="">Todos os tipos</option>
+                                        <option>Receita</option>
+                                        <option>Despesa</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <button class="btn btn-outline-light w-100" onclick="filterTransactions()">Filtrar</button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-dark">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Descrição</th>
+                                            <th>Categoria</th>
+                                            <th>Valor</th>
+                                            <th>Tipo</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="transactions-table">
+                                        <!-- Dados serão inseridos via JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Orçamento Section -->
+                <div id="budget-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Orçamento Mensal</h2>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addBudgetModal">
+                            <i class="fas fa-plus"></i> Definir Orçamento
+                        </button>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Orçamento por Categoria</h5>
+                                    <div id="budget-categories">
+                                        <!-- Dados serão inseridos via JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Progresso do Orçamento</h5>
+                                    <canvas id="budgetChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metas Section -->
+                <div id="goals-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Metas Financeiras</h2>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#addGoalModal">
+                            <i class="fas fa-plus"></i> Nova Meta
+                        </button>
+                    </div>
+                    
+                    <div class="row" id="goals-container">
+                        <!-- Metas serão inseridas via JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Assistente IA Section -->
+                <div id="ai-assistant-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Assistente IA Financeiro</h2>
+                        <p class="text-muted">Análise inteligente e insights personalizados</p>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-robot text-primary"></i> Chat com IA</h5>
+                                    <div id="chat-container" style="height: 400px; overflow-y: auto; border: 1px solid #324968; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                                        <div id="chat-messages">
+                                            <div class="ai-message">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="fas fa-robot text-primary me-2 mt-1"></i>
+                                                    <div class="bg-primary bg-opacity-25 p-3 rounded">
+                                                        <p class="mb-0">Olá! Sou seu assistente financeiro IA. Posso ajudar você com análises sobre suas finanças, gerar relatórios inteligentes e dar recomendações personalizadas. Como posso ajudar?</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="chat-input" placeholder="Digite sua pergunta...">
+                                        <button class="btn btn-primary" onclick="sendMessage()">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <small class="text-muted">Exemplos: "Como está meu saldo?", "Quais são minhas maiores despesas?", "Gere um relatório do mês"</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-chart-line text-success"></i> Insights Rápidos</h5>
+                                    <div id="quick-insights">
+                                        <div class="text-center">
+                                            <i class="fas fa-spinner fa-spin text-muted"></i>
+                                            <p class="text-muted">Carregando insights...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mt-3">
+                                <div class="card-body">
+                                    <h5><i class="fas fa-magic text-warning"></i> Ações Rápidas</h5>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-primary btn-sm" onclick="quickAction('saldo')">
+                                            <i class="fas fa-wallet"></i> Ver Saldo
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm" onclick="quickAction('categorias')">
+                                            <i class="fas fa-chart-pie"></i> Análise por Categoria
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm" onclick="quickAction('metas')">
+                                            <i class="fas fa-bullseye"></i> Status das Metas
+                                        </button>
+                                        <button class="btn btn-outline-warning btn-sm" onclick="quickAction('relatorio')">
+                                            <i class="fas fa-file-alt"></i> Gerar Relatório
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Relatórios Section -->
+                <div id="reports-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Relatórios</h2>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Relatório Mensal</h5>
+                                    <canvas id="monthlyReportChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Análise de Tendências</h5>
+                                    <canvas id="trendsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configurações Section -->
+                <div id="settings-section" class="content-section">
+                    <div class="dashboard-header">
+                        <h2>Configurações</h2>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Perfil</h5>
+                                    <form>
+                                        <div class="mb-3">
+                                            <label class="form-label">Nome</label>
+                                            <input type="text" class="form-control" value="Usuário">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Email</label>
+                                            <input type="email" class="form-control" value="usuario@email.com">
+                                        </div>
+                                        <button type="submit" class="btn btn-outline-light">Salvar</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5>Preferências</h5>
+                                    <div class="mb-3">
+                                        <label class="form-label">Moeda</label>
+                                        <select class="form-select">
+                                            <option>Real (R$)</option>
+                                            <option>Dólar ($)</option>
+                                            <option>Euro (€)</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Tema</label>
+                                        <select class="form-select">
+                                            <option>Escuro</option>
+                                            <option>Claro</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-outline-light">Aplicar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nova Transação -->
+    <div class="modal fade" id="addTransactionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nova Transação</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="transactionForm">
+                        <div class="mb-3">
+                            <label class="form-label">Descrição</label>
+                            <input type="text" class="form-control" name="description" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor</label>
+                            <input type="number" class="form-control" name="value" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Categoria</label>
+                            <select class="form-select" name="category" required>
+                                <option>Alimentação</option>
+                                <option>Transporte</option>
+                                <option>Moradia</option>
+                                <option>Lazer</option>
+                                <option>Saúde</option>
+                                <option>Educação</option>
+                                <option>Salário</option>
+                                <option>Trabalho Extra</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" name="type" required>
+                                <option>Despesa</option>
+                                <option>Receita</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Data</label>
+                            <input type="date" class="form-control" name="date" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="transactionForm" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nova Meta -->
+    <div class="modal fade" id="addGoalModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nova Meta</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="goalForm">
+                        <div class="mb-3">
+                            <label class="form-label">Título</label>
+                            <input type="text" class="form-control" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Meta (R$)</label>
+                            <input type="number" class="form-control" name="target" step="0.01" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor Atual (R$)</label>
+                            <input type="number" class="form-control" name="current" step="0.01" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Data Limite</label>
+                            <input type="date" class="form-control" name="deadline" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="goalForm" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Novo Orçamento -->
+    <div class="modal fade" id="addBudgetModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark">
+                <div class="modal-header">
+                    <h5 class="modal-title">Novo Orçamento</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="budgetForm">
+                        <div class="mb-3">
+                            <label class="form-label">Categoria</label>
+                            <select class="form-select" name="category" required>
+                                <option>Alimentação</option>
+                                <option>Transporte</option>
+                                <option>Moradia</option>
+                                <option>Lazer</option>
+                                <option>Saúde</option>
+                                <option>Educação</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Valor do Orçamento (R$)</label>
+                            <input type="number" class="form-control" name="budget_amount" step="0.01" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" form="budgetForm" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    
+    <!-- Performance and Analytics -->
+    <script>
+        // Performance monitoring
+        if ('performance' in window) {
+            window.addEventListener('load', function() {
+                setTimeout(function() {
+                    const perfData = performance.getEntriesByType('navigation')[0];
+                    console.log('Page load time:', perfData.loadEventEnd - perfData.loadEventStart, 'ms');
+                }, 0);
+            });
+        }
+        
+        // Service Worker registration (for PWA features)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful');
+                }).catch(function(err) {
+                    console.log('ServiceWorker registration failed');
+                });
+            });
+        }
+        
+        // Theme detection and application
+        function applyTheme() {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDark) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        }
+        
+        // Apply theme on load and change
+        applyTheme();
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + K for search (if implemented)
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                // Focus search input if available
+                const searchInput = document.querySelector('input[type="search"], #search-transaction');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+            
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                const openModals = document.querySelectorAll('.modal.show');
+                openModals.forEach(modal => {
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    if (bsModal) {
+                        bsModal.hide();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
