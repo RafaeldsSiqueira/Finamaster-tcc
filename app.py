@@ -1,15 +1,25 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from datetime import datetime, timedelta
 import json
 import os
 
 app = Flask(__name__)
+CORS(app)  # Permite requisições cross-origin
 app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///finanmaster.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+# Configuração CORS adicional
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Modelos do banco de dados
 class Transaction(db.Model):
@@ -43,8 +53,19 @@ class Budget(db.Model):
 
 # Rotas principais
 @app.route('/')
+def landing():
+    """Página inicial do FinanMaster"""
+    return render_template('landing.html')
+
+@app.route('/dashboard')
 def dashboard():
+    """Dashboard principal da aplicação"""
     return render_template('index.html')
+
+@app.route('/login')
+def login():
+    """Página de login"""
+    return render_template('login.html')
 
 @app.route('/api/dashboard-data')
 def get_dashboard_data():
