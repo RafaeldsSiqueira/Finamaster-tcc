@@ -1,17 +1,29 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, timedelta
+from sqlalchemy import inspect, text
+from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import os
 
 app = Flask(__name__)
 CORS(app)  # Permite requisições cross-origin
 app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///finanmaster.db'
+# Unifica a base: usar o arquivo em instance/finanmaster.db
+# Usar caminho absoluto para evitar erros de abertura do arquivo SQLite
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'instance', 'finanmaster.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+# Identidade do usuário atual
+@app.route('/api/me')
+def whoami():
+    if 'user_id' not in session:
+        return jsonify({'authenticated': False})
+    return jsonify({'authenticated': True, 'user_id': session['user_id'], 'username': session.get('username', '')})
 
 # Configuração CORS adicional
 @app.after_request
@@ -22,6 +34,25 @@ def after_request(response):
     return response
 
 # Modelos do banco de dados
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    password_hint = db.Column(db.String(255))
+
+    # Relationships (lazy='dynamic' for query chaining)
+    transactions = db.relationship('Transaction', backref='user', lazy='dynamic')
+    goals = db.relationship('Goal', backref='user', lazy='dynamic')
+    budgets = db.relationship('Budget', backref='user', lazy='dynamic')
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        return check_password_hash(self.password_hash, password)
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
@@ -30,6 +61,7 @@ class Transaction(db.Model):
     type = db.Column(db.String(20), nullable=False)  # Receita ou Despesa
     date = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
 class Goal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,6 +71,7 @@ class Goal(db.Model):
     deadline = db.Column(db.DateTime, nullable=False)
     icon = db.Column(db.String(50), default='fas fa-bullseye')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
 class Budget(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -48,6 +81,11 @@ class Budget(db.Model):
     month = db.Column(db.Integer, nullable=False)
     year = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+
+def get_current_user_id() -> int | None:
+    return session.get('user_id')
 
 
 
@@ -59,7 +97,9 @@ def landing():
 
 @app.route('/dashboard')
 def dashboard():
-    """Dashboard principal da aplicação"""
+    """Dashboard principal da aplicação (protegido)."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
     return render_template('index.html')
 
 @app.route('/login')
@@ -67,73 +107,162 @@ def login():
     """Página de login"""
     return render_template('login.html')
 
+
+# Autenticação
+@app.route('/api/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json(force=True)
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip().lower()
+        password = (data.get('password') or '').strip()
+        password_hint = (data.get('password_hint') or '').strip() or None
+
+        if not username or not email or not password:
+            return jsonify({'success': False, 'message': 'Preencha todos os campos.'}), 400
+
+        # Verificar existência
+        if User.query.filter((User.email == email) | (User.username == username)).first():
+            return jsonify({'success': False, 'message': 'Usuário ou e-mail já cadastrado.'}), 409
+
+        user = User(username=username, email=email, password_hint=password_hint)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        # Autologin após cadastro
+        session['user_id'] = user.id
+        session['username'] = user.username
+        return jsonify({'success': True, 'message': 'Cadastro realizado com sucesso.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    try:
+        data = request.get_json(force=True)
+        email = (data.get('email') or '').strip().lower()
+        password = (data.get('password') or '').strip()
+
+        if not email or not password:
+            return jsonify({'success': False, 'message': 'Informe e-mail e senha.'}), 400
+
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.check_password(password):
+            return jsonify({'success': False, 'message': 'Credenciais inválidas.'}), 401
+
+        session['user_id'] = user.id
+        session['username'] = user.username
+        return jsonify({'success': True, 'message': 'Login realizado com sucesso.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop('user_id', None)
+    session.pop('username', None)
+    return jsonify({'success': True})
+
+
+@app.route('/api/password-hint', methods=['POST'])
+def get_password_hint():
+    try:
+        data = request.get_json(force=True)
+        email = (data.get('email') or '').strip().lower()
+        if not email:
+            return jsonify({'success': False, 'message': 'Informe o e-mail.'}), 400
+        user = User.query.filter_by(email=email).first()
+        if not user or not user.password_hint:
+            return jsonify({'success': False, 'message': 'Nenhuma dica cadastrada.'}), 404
+        return jsonify({'success': True, 'hint': user.password_hint})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
 @app.route('/api/dashboard-data')
 def get_dashboard_data():
-    """Retorna dados para o dashboard"""
-    current_month = datetime.now().month
-    current_year = datetime.now().year
-    
-    # Calcular totais do mês atual
-    receitas = db.session.query(db.func.sum(Transaction.value)).filter(
-        Transaction.type == 'Receita',
-        db.func.extract('month', Transaction.date) == current_month,
-        db.func.extract('year', Transaction.date) == current_year
-    ).scalar() or 0
-    
-    despesas = db.session.query(db.func.sum(Transaction.value)).filter(
-        Transaction.type == 'Despesa',
-        db.func.extract('month', Transaction.date) == current_month,
-        db.func.extract('year', Transaction.date) == current_year
-    ).scalar() or 0
-    
+    """Retorna dados para o dashboard com tendências reais."""
+    now = datetime.now()
+    current_month = now.month
+    current_year = now.year
+    # mês anterior
+    prev_ref = now.replace(day=1) - timedelta(days=1)
+    prev_month = prev_ref.month
+    prev_year = prev_ref.year
+    user_id = get_current_user_id()
+    if not user_id:
+        return jsonify({'saldo': 0, 'receitas': 0, 'despesas': 0, 'economia': 0, 'months_data': [], 'categorias_despesas': [], 'trends': {}})
+
+    def sum_by(month: int, year: int, tipo: str) -> float:
+        return db.session.query(db.func.sum(Transaction.value)).filter(
+            Transaction.type == tipo,
+            db.func.extract('month', Transaction.date) == month,
+            db.func.extract('year', Transaction.date) == year,
+            Transaction.user_id == user_id
+        ).scalar() or 0
+
+    receitas = sum_by(current_month, current_year, 'Receita')
+    despesas = sum_by(current_month, current_year, 'Despesa')
     saldo = receitas - despesas
-    
-    # Dados dos últimos 6 meses para gráfico
+
+    receitas_prev = sum_by(prev_month, prev_year, 'Receita')
+    despesas_prev = sum_by(prev_month, prev_year, 'Despesa')
+    saldo_prev = receitas_prev - despesas_prev
+
+    def pct_change(curr: float, prev: float | None):
+        if not prev:
+            return None
+        try:
+            return round(((curr - prev) / prev) * 100, 1)
+        except ZeroDivisionError:
+            return None
+
+    economia_pct = round((saldo / receitas) * 100, 1) if receitas > 0 else None
+
+    # últimos 6 meses para gráfico
     months_data = []
     for i in range(6):
         date = datetime.now() - timedelta(days=30*i)
-        month_receitas = db.session.query(db.func.sum(Transaction.value)).filter(
-            Transaction.type == 'Receita',
-            db.func.extract('month', Transaction.date) == date.month,
-            db.func.extract('year', Transaction.date) == date.year
-        ).scalar() or 0
-        
-        month_despesas = db.session.query(db.func.sum(Transaction.value)).filter(
-            Transaction.type == 'Despesa',
-            db.func.extract('month', Transaction.date) == date.month,
-            db.func.extract('year', Transaction.date) == date.year
-        ).scalar() or 0
-        
+        m_rec = sum_by(date.month, date.year, 'Receita')
+        m_des = sum_by(date.month, date.year, 'Despesa')
         months_data.append({
             'month': date.strftime('%b'),
-            'receitas': month_receitas,
-            'despesas': month_despesas,
-            'saldo': month_receitas - month_despesas
+            'receitas': m_rec,
+            'despesas': m_des,
+            'saldo': m_rec - m_des
         })
-    
-    # Distribuição de despesas por categoria
+
     categorias_despesas = db.session.query(
         Transaction.category,
         db.func.sum(Transaction.value).label('total')
     ).filter(
         Transaction.type == 'Despesa',
         db.func.extract('month', Transaction.date) == current_month,
-        db.func.extract('year', Transaction.date) == current_year
+        db.func.extract('year', Transaction.date) == current_year,
+        Transaction.user_id == user_id
     ).group_by(Transaction.category).all()
-    
+
     return jsonify({
         'saldo': saldo,
         'receitas': receitas,
         'despesas': despesas,
         'economia': saldo,
         'months_data': months_data,
-        'categorias_despesas': [{'categoria': c[0], 'total': c[1]} for c in categorias_despesas]
+        'categorias_despesas': [{'categoria': c[0], 'total': c[1]} for c in categorias_despesas],
+        'trends': {
+            'saldo': pct_change(saldo, saldo_prev),
+            'receitas': pct_change(receitas, receitas_prev),
+            'despesas': pct_change(despesas, despesas_prev),
+            'economia': economia_pct
+        }
     })
 
 @app.route('/api/transactions')
 def get_transactions():
     """Retorna lista de transações"""
-    transactions = Transaction.query.order_by(Transaction.date.desc()).all()
+    user_id = get_current_user_id()
+    transactions = Transaction.query.filter_by(user_id=user_id).order_by(Transaction.date.desc()).all()
     return jsonify([{
         'id': t.id,
         'description': t.description,
@@ -153,7 +282,8 @@ def add_transaction():
             value=float(data['value']),
             category=data['category'],
             type=data['type'],
-            date=datetime.strptime(data['date'], '%Y-%m-%d')
+            date=datetime.strptime(data['date'], '%Y-%m-%d'),
+            user_id=get_current_user_id()
         )
         db.session.add(transaction)
         db.session.commit()
@@ -165,7 +295,7 @@ def add_transaction():
 def delete_transaction(transaction_id):
     """Remove transação"""
     try:
-        transaction = Transaction.query.get_or_404(transaction_id)
+        transaction = Transaction.query.filter_by(id=transaction_id, user_id=get_current_user_id()).first_or_404()
         db.session.delete(transaction)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Transação removida com sucesso!'})
@@ -175,7 +305,7 @@ def delete_transaction(transaction_id):
 @app.route('/api/goals')
 def get_goals():
     """Retorna lista de metas"""
-    goals = Goal.query.all()
+    goals = Goal.query.filter_by(user_id=get_current_user_id()).all()
     return jsonify([{
         'id': g.id,
         'title': g.title,
@@ -196,7 +326,8 @@ def add_goal():
             target=float(data['target']),
             current=float(data.get('current', 0)),
             deadline=datetime.strptime(data['deadline'], '%Y-%m-%d'),
-            icon=data.get('icon', 'fas fa-bullseye')
+            icon=data.get('icon', 'fas fa-bullseye'),
+            user_id=get_current_user_id()
         )
         db.session.add(goal)
         db.session.commit()
@@ -209,7 +340,7 @@ def update_goal_progress(goal_id):
     """Atualiza progresso da meta"""
     try:
         data = request.json
-        goal = Goal.query.get_or_404(goal_id)
+        goal = Goal.query.filter_by(id=goal_id, user_id=get_current_user_id()).first_or_404()
         goal.current = float(data['current'])
         db.session.commit()
         return jsonify({'success': True, 'message': 'Progresso atualizado com sucesso!'})
@@ -221,10 +352,12 @@ def get_budget():
     """Retorna dados do orçamento"""
     current_month = datetime.now().month
     current_year = datetime.now().year
+    user_id = get_current_user_id()
     
     budgets = Budget.query.filter(
         Budget.month == current_month,
-        Budget.year == current_year
+        Budget.year == current_year,
+        Budget.user_id == user_id
     ).all()
     
     # Calcular gastos reais por categoria
@@ -234,7 +367,8 @@ def get_budget():
     ).filter(
         Transaction.type == 'Despesa',
         db.func.extract('month', Transaction.date) == current_month,
-        db.func.extract('year', Transaction.date) == current_year
+        db.func.extract('year', Transaction.date) == current_year,
+        Transaction.user_id == user_id
     ).group_by(Transaction.category).all()
     
     gastos_dict = {c[0]: c[1] for c in categorias_gastos}
@@ -255,7 +389,8 @@ def add_budget():
             category=data['category'],
             budget_amount=float(data['budget_amount']),
             month=datetime.now().month,
-            year=datetime.now().year
+            year=datetime.now().year,
+            user_id=get_current_user_id()
         )
         db.session.add(budget)
         db.session.commit()
@@ -263,23 +398,58 @@ def add_budget():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
 
+# Editar orçamento do mês atual por categoria
+@app.route('/api/budget', methods=['PUT'])
+def edit_budget():
+    """Atualiza o valor orçado de uma categoria no mês corrente para o usuário logado."""
+    try:
+        data = request.get_json(force=True)
+        category = (data.get('category') or '').strip()
+        new_amount = float(data.get('budget_amount'))
+
+        if not category:
+            return jsonify({'success': False, 'message': 'Categoria é obrigatória.'}), 400
+
+        current_month = datetime.now().month
+        current_year = datetime.now().year
+        user_id = get_current_user_id()
+
+        budget = Budget.query.filter_by(
+            category=category,
+            month=current_month,
+            year=current_year,
+            user_id=user_id
+        ).first()
+
+        if not budget:
+            return jsonify({'success': False, 'message': 'Orçamento não encontrado para esta categoria.'}), 404
+
+        budget.budget_amount = new_amount
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Orçamento atualizado.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
 @app.route('/api/reports/monthly')
 def get_monthly_report():
     """Retorna relatório mensal"""
     current_year = datetime.now().year
+    user_id = get_current_user_id()
     monthly_data = []
     
     for month in range(1, 13):
         receitas = db.session.query(db.func.sum(Transaction.value)).filter(
             Transaction.type == 'Receita',
             db.func.extract('month', Transaction.date) == month,
-            db.func.extract('year', Transaction.date) == current_year
+            db.func.extract('year', Transaction.date) == current_year,
+            Transaction.user_id == user_id
         ).scalar() or 0
         
         despesas = db.session.query(db.func.sum(Transaction.value)).filter(
             Transaction.type == 'Despesa',
             db.func.extract('month', Transaction.date) == month,
-            db.func.extract('year', Transaction.date) == current_year
+            db.func.extract('year', Transaction.date) == current_year,
+            Transaction.user_id == user_id
         ).scalar() or 0
         
         monthly_data.append({
@@ -295,7 +465,8 @@ def get_monthly_report():
 # Função para popular dados de exemplo
 def populate_sample_data():
     """Popula o banco com dados de exemplo"""
-    if Transaction.query.count() == 0:
+    # Não popular dados globais; manter contas novas vazias.
+    if False and Transaction.query.count() == 0:
         sample_transactions = [
             Transaction(description='Salário', value=8500, category='Salário', type='Receita', date=datetime.now() - timedelta(days=5)),
             Transaction(description='Supermercado', value=450, category='Alimentação', type='Despesa', date=datetime.now() - timedelta(days=4)),
@@ -309,7 +480,7 @@ def populate_sample_data():
         
         db.session.commit()
     
-    if Goal.query.count() == 0:
+    if False and Goal.query.count() == 0:
         sample_goals = [
             Goal(title='Viagem para Europa', target=15000, current=8500, deadline=datetime.now() + timedelta(days=300), icon='fas fa-plane'),
             Goal(title='Entrada do Apartamento', target=50000, current=25000, deadline=datetime.now() + timedelta(days=500), icon='fas fa-home'),
@@ -321,7 +492,7 @@ def populate_sample_data():
         
         db.session.commit()
     
-    if Budget.query.count() == 0:
+    if False and Budget.query.count() == 0:
         sample_budgets = [
             Budget(category='Alimentação', budget_amount=800, spent_amount=650, month=datetime.now().month, year=datetime.now().year),
             Budget(category='Transporte', budget_amount=400, spent_amount=320, month=datetime.now().month, year=datetime.now().year),
@@ -339,6 +510,27 @@ def populate_sample_data():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        # Migração automática: garantir coluna password_hint
+        try:
+            insp = db.inspect(db.engine)
+            cols = [c['name'] for c in insp.get_columns('users')]
+            if 'password_hint' not in cols:
+                db.session.execute(text('ALTER TABLE users ADD COLUMN password_hint VARCHAR(255)'))
+                db.session.commit()
+        except Exception:
+            pass
+        # Migração automática: adicionar user_id nas tabelas se faltar
+        try:
+            insp = db.inspect(db.engine)
+            for table in ('transaction', 'goal', 'budget'):
+                cols = [c['name'] for c in insp.get_columns(table)]
+                if 'user_id' not in cols:
+                    # "transaction" é palavra reservada; precisa de aspas na instrução SQL
+                    tname = '"transaction"' if table == 'transaction' else table
+                    db.session.execute(text(f'ALTER TABLE {tname} ADD COLUMN user_id INTEGER'))
+            db.session.commit()
+        except Exception:
+            pass
         populate_sample_data()
     
     app.run(debug=True, host='0.0.0.0', port=5001)

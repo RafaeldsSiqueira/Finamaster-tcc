@@ -6,6 +6,7 @@ let goals = [];
 let budgetData = [];
 let charts = {};
 let aiResponses = [];
+let currentUserId = null;
 
 // Configuração da API MCP
 const MCP_API_BASE = 'http://localhost:8000';
@@ -300,6 +301,12 @@ async function loadDashboardData() {
         animateNumberCounting('despesas-total', dashboardData.despesas);
         animateNumberCounting('economia-total', dashboardData.economia);
         
+        // Atualizar trends percentuais dinâmicos
+        updateTrend('saldo-trend', dashboardData.trends?.saldo);
+        updateTrend('receitas-trend', dashboardData.trends?.receitas);
+        updateTrend('despesas-trend', dashboardData.trends?.despesas);
+        updateTrend('economia-trend', dashboardData.trends?.economia);
+
         // Atualizar gráficos
         updateCharts();
         
@@ -362,6 +369,24 @@ function hideLoadingState() {
         }
     });
 }
+// Atualiza badges de tendência (%). Esconde quando não houver base
+function updateTrend(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const icon = el.querySelector('i');
+    const span = el.querySelector('span');
+    if (value === null || value === undefined) {
+        el.style.visibility = 'hidden';
+        return;
+    }
+    el.style.visibility = 'visible';
+    const positive = Number(value) >= 0;
+    el.classList.toggle('positive', positive);
+    el.classList.toggle('negative', !positive);
+    if (icon) icon.className = `fas ${positive ? 'fa-arrow-up' : 'fa-arrow-down'}`;
+    if (span) span.textContent = `${positive ? '+' : ''}${Number(value).toFixed(1)}%`;
+}
+
 
 // Show error state
 function showErrorState(message) {
@@ -861,6 +886,50 @@ function initializeEventListeners() {
             await addBudget(this);
         });
     }
+
+    // Preencher categorias quando abrir o modal de edição
+    const editBudgetModal = document.getElementById('editBudgetModal');
+    if (editBudgetModal) {
+        editBudgetModal.addEventListener('show.bs.modal', function() {
+            const sel = document.getElementById('edit-budget-category');
+            if (!sel) return;
+            sel.innerHTML = (budgetData || []).map(b => `<option>${b.category}</option>`).join('');
+        });
+    }
+
+    // Form de edição de orçamento
+    const editBudgetForm = document.getElementById('editBudgetForm');
+    if (editBudgetForm) {
+        editBudgetForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            try {
+                const formData = new FormData(this);
+                const payload = {
+                    category: formData.get('category'),
+                    budget_amount: parseFloat(formData.get('budget_amount'))
+                };
+                const resp = await fetch('/api/budget', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (resp.ok && result.success) {
+                    alert('Orçamento atualizado.');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editBudgetModal'));
+                    if (modal) modal.hide();
+                    await loadBudget();
+                    loadBudgetCategories();
+                    updateCharts();
+                } else {
+                    alert(result.message || 'Falha ao atualizar orçamento.');
+                }
+            } catch (err) {
+                console.error('Erro ao editar orçamento:', err);
+                alert('Erro ao editar orçamento');
+            }
+        });
+    }
 }
 
 // Adicionar transação
@@ -1105,12 +1174,12 @@ async function sendMessage() {
     
     try {
         // Enviar para o MCP
-        const response = await fetch('http://localhost:8000/ai/analyze', {
+        const response = await fetch(`${MCP_API_BASE}/ai/analyze`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ query: message })
+            body: JSON.stringify({ query: message, user_id: currentUserId || undefined })
         });
         
         const result = await response.json();
@@ -1143,7 +1212,7 @@ function addMessageToChat(sender, message) {
     messageDiv.className = sender === 'user' ? 'user-message' : 'ai-message';
     
     const icon = sender === 'user' ? 'fas fa-user' : 'fas fa-robot';
-    const bgClass = sender === 'user' ? 'bg-secondary' : 'bg-primary bg-opacity-25';
+    const bgClass = sender === 'user' ? 'bg-secondary' : 'chat-bubble-ai';
     
     // Formatar mensagem da IA
     const formattedMessage = sender === 'ai' ? formatAIResponse(message) : message;
@@ -1219,7 +1288,7 @@ function showTypingIndicator() {
     typingDiv.innerHTML = `
         <div class="d-flex align-items-start">
             <i class="fas fa-robot text-primary me-2 mt-1"></i>
-            <div class="bg-primary bg-opacity-25 p-3 rounded">
+            <div class="chat-bubble-ai p-3">
                 <div class="dot"></div>
                 <div class="dot"></div>
                 <div class="dot"></div>
@@ -1259,6 +1328,35 @@ function executeActions(actions) {
                 // Sugerir metas
                 suggestGoals();
                 break;
+            case 'prompt_add_data':
+                // Levar usuário ao cadastro de nova transação
+                try {
+                    const link = document.querySelector('.nav-link[data-section="transactions"]');
+                    if (link) link.click();
+                    const el = document.getElementById('addTransactionModal');
+                    if (el && window.bootstrap) { new bootstrap.Modal(el).show(); }
+                } catch (_) {}
+                break;
+            case 'navigate_to_section': {
+                const section = action.data?.section;
+                const openModal = !!action.data?.openModal;
+                const selector = {
+                    'dashboard': '.nav-link[data-section="dashboard"]',
+                    'transactions': '.nav-link[data-section="transactions"]',
+                    'budget': '.nav-link[data-section="budget"]',
+                    'goals': '.nav-link[data-section="goals"]',
+                    'reports': '.nav-link[data-section="reports"]'
+                }[section];
+                if (selector) {
+                    const link = document.querySelector(selector);
+                    if (link) link.click();
+                }
+                if (openModal) {
+                    const el = document.getElementById('addTransactionModal');
+                    if (el && window.bootstrap) { try { new bootstrap.Modal(el).show(); } catch(e) {} }
+                }
+                break;
+            }
         }
     });
 }
@@ -1323,7 +1421,7 @@ window.quickAction = async function quickAction(action) {
 // Atualizar insights rápidos
 async function updateQuickInsights() {
     try {
-        const response = await fetch('http://localhost:8000/reports/generate', {
+        const response = await fetch(`${MCP_API_BASE}/reports/generate`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1341,7 +1439,7 @@ async function updateQuickInsights() {
         quickInsights.innerHTML = '';
         
         // Adicionar insights principais
-        if (result.insights && result.insights.length > 0) {
+        if (Array.isArray(result.insights) && result.insights.length > 0) {
             result.insights.slice(0, 3).forEach(insight => {
                 const insightCard = document.createElement('div');
                 insightCard.className = 'insight-card positive';
@@ -1353,7 +1451,7 @@ async function updateQuickInsights() {
         }
         
         // Adicionar recomendações
-        if (result.recommendations && result.recommendations.length > 0) {
+        if (Array.isArray(result.recommendations) && result.recommendations.length > 0) {
             result.recommendations.slice(0, 2).forEach(recommendation => {
                 const insightCard = document.createElement('div');
                 insightCard.className = 'insight-card warning';
@@ -1363,7 +1461,15 @@ async function updateQuickInsights() {
                 quickInsights.appendChild(insightCard);
             });
         }
-        
+        // Se nada foi exibido, mostrar orientação para cadastrar dados
+        if (quickInsights.children.length === 0) {
+            quickInsights.innerHTML = `
+                <div class="text-center">
+                    <i class="fas fa-info-circle text-muted"></i>
+                    <p class="text-muted">Sem dados no período. Cadastre transações para gerar insights.</p>
+                </div>
+            `;
+        }
     } catch (error) {
         console.error('Erro ao atualizar insights:', error);
         const quickInsights = document.getElementById('quick-insights');
@@ -1387,8 +1493,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Carregar insights iniciais
+    // Busca em tempo real e filtros de transações
+    const searchTx = document.getElementById('search-transaction');
+    if (searchTx) searchTx.addEventListener('input', () => window.filterTransactions && filterTransactions());
+    const filterCat = document.getElementById('filter-category');
+    if (filterCat) filterCat.addEventListener('change', () => window.filterTransactions && filterTransactions());
+    const filterType = document.getElementById('filter-type');
+    if (filterType) filterType.addEventListener('change', () => window.filterTransactions && filterTransactions());
+
+    // Carregar insights iniciais, mas esconder se lista vier vazia
     updateQuickInsights();
+    // Buscar identidade do usuário
+    fetch('/api/me').then(r => r.json()).then(me => {
+        if (me && me.authenticated) {
+            currentUserId = me.user_id;
+        }
+    }).catch(() => {});
 });
 
 // ========== FUNCOES DE IA ==========
@@ -1427,7 +1547,8 @@ async function generateReport() {
             body: JSON.stringify({
                 period: period,
                 report_type: type,
-                insights: true
+                insights: true,
+                user_id: currentUserId || undefined
             })
         });
         

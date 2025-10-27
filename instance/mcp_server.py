@@ -26,6 +26,7 @@ class ReportRequest(BaseModel):
     period: Optional[str] = "current_month"
     categories: Optional[List[str]] = None
     insights: bool = True
+    user_id: Optional[int] = None
 
 class ReportResponse(BaseModel):
     report_type: str
@@ -37,6 +38,7 @@ class ReportResponse(BaseModel):
 class AIAgentRequest(BaseModel):
     query: str
     context: Optional[Dict[str, Any]] = None
+    user_id: Optional[int] = None
 
 class AIAgentResponse(BaseModel):
     response: str
@@ -44,7 +46,8 @@ class AIAgentResponse(BaseModel):
     confidence: float
 
 # Configuração do banco de dados
-DB_PATH = "finanmaster.db"
+# Usar sempre o banco dentro da própria pasta instance
+DB_PATH = str(Path(__file__).with_name("finanmaster.db"))
 
 def get_db_connection():
     """Cria conexão com o banco de dados"""
@@ -59,7 +62,17 @@ def execute_query(query: str, params: tuple = ()) -> List[tuple]:
     conn.close()
     return results
 
-def get_transactions_data(period: str = "current_month") -> pd.DataFrame:
+# Mensagem padrão quando não há dados
+def no_data_message() -> str:
+    return (
+        "📝 Você ainda não possui dados cadastrados neste período.\n\n"
+        "Para começar a gerar insights:\n"
+        "• Adicione sua primeira transação (Receita ou Despesa)\n"
+        "• Defina um orçamento e metas financeiras\n\n"
+        "Posso abrir o formulário de nova transação para você agora."
+    )
+
+def get_transactions_data(period: str = "current_month", user_id: Optional[int] = None) -> pd.DataFrame:
     """Obtém dados de transações como DataFrame"""
     if period == "current_month":
         query = """
@@ -90,7 +103,15 @@ def get_transactions_data(period: str = "current_month") -> pd.DataFrame:
         """
     
     try:
-        results = execute_query(query)
+        # Filtro por usuário se disponível (coluna user_id existe nas tabelas)
+        if user_id is not None:
+            if "WHERE" in query:
+                query += " AND user_id = ?"
+            else:
+                query += " WHERE user_id = ?"
+            results = execute_query(query, (user_id,))
+        else:
+            results = execute_query(query)
         if results:
             df = pd.DataFrame(results, columns=['description', 'value', 'category', 'type', 'date', 'created_at'])
             # Converter colunas para tipos corretos
@@ -215,7 +236,7 @@ async def generate_report(request: ReportRequest):
     """Gera relatório financeiro com insights"""
     try:
         # Obter dados
-        df = get_transactions_data(request.period)
+        df = get_transactions_data(request.period, request.user_id)
         print(f"DataFrame shape: {df.shape}")
         print(f"DataFrame columns: {df.columns.tolist()}")
         print(f"Date column dtype: {df['date'].dtype if 'date' in df.columns else 'N/A'}")
@@ -301,7 +322,15 @@ async def analyze_with_ai(request: AIAgentRequest):
     """Análise inteligente com IA"""
     try:
         # Obter dados recentes para contexto
-        df = get_transactions_data("current_month")
+        df = get_transactions_data("current_month", request.user_id)
+
+        # Sem dados -> orientar cadastro
+        if df.empty:
+            return AIAgentResponse(
+                response=no_data_message(),
+                actions=[{"type": "prompt_add_data", "data": {}}],
+                confidence=0.95
+            )
         
         # Análise básica baseada na query
         query_lower = request.query.lower()
@@ -309,6 +338,32 @@ async def analyze_with_ai(request: AIAgentRequest):
         actions = []
         confidence = 0.8
         
+        # Navegação por comandos naturais
+        def nav_response(section: str, open_modal: bool = False, text: str = ""):
+            txt = text or {
+                'transactions': 'Abrindo Transações…',
+                'budget': 'Abrindo Orçamento…',
+                'goals': 'Abrindo Metas…',
+                'reports': 'Abrindo Relatórios…',
+                'dashboard': 'Indo para o Dashboard…'
+            }.get(section, 'Abrindo seção…')
+            return AIAgentResponse(
+                response=txt,
+                actions=[{"type": "navigate_to_section", "data": {"section": section, "openModal": open_modal}}],
+                confidence=0.95
+            )
+
+        if any(k in query_lower for k in ["abrir transa", "nova transa", "lançament", "lancament"]):
+            return nav_response('transactions', True, 'Abrindo Transações e o formulário de nova transação…')
+        if any(k in query_lower for k in ["abrir orçamento", "abrir orcamento", "ver orçamento", "ver orcamento", "orçamento", "orcamento"]):
+            return nav_response('budget', False)
+        if any(k in query_lower for k in ["abrir metas", "abrir meta", "ver metas", "ver meta", "metas"]):
+            return nav_response('goals', False)
+        if any(k in query_lower for k in ["relatório", "relatorio", "relatórios", "relatorios", "abrir relat"]):
+            return nav_response('reports', False)
+        if any(k in query_lower for k in ["dashboard", "início", "inicio", "home"]):
+            return nav_response('dashboard', False)
+
         if "saldo" in query_lower or "balanço" in query_lower:
             receitas = df[df['type'] == 'Receita']['value'].sum()
             despesas = df[df['type'] == 'Despesa']['value'].sum()
@@ -451,7 +506,20 @@ async def chat_with_ai(request: AIAgentRequest):
     """Chat interativo com agente IA"""
     try:
         # Obter dados recentes para contexto
-        df = get_transactions_data("current_month")
+        df = get_transactions_data("current_month", request.user_id)
+
+        # Sem dados -> resposta conversacional amigável
+        if df.empty:
+            return AIAgentResponse(
+                response=(
+                    "Olá! 👋 Notei que você ainda não cadastrou transações.\n\n"
+                    "• Clique em “Nova Transação” para registrar sua primeira receita ou despesa.\n"
+                    "• Depois disso, posso analisar seus gastos, gerar relatórios e sugerir metas.\n\n"
+                    "Quer que eu abra o formulário de nova transação?"
+                ),
+                actions=[{"type": "prompt_add_data", "data": {}}],
+                confidence=0.95
+            )
         
         # Análise mais conversacional baseada na query
         query_lower = request.query.lower()
@@ -479,7 +547,26 @@ async def chat_with_ai(request: AIAgentRequest):
                 "data": {"saldo": float(saldo), "receitas": float(receitas), "despesas": float(despesas)}
             })
             
-        elif any(word in query_lower for word in ["relatório", "relatorio", "report", "análise completa", "analise completa"]):
+        # Comandos naturais de navegação no chat
+        elif any(k in query_lower for k in ["abrir transa", "nova transa", "lançament", "lancament"]):
+            return AIAgentResponse(
+                response='Perfeito! Vou abrir Transações e o formulário de nova transação.',
+                actions=[{"type": "navigate_to_section", "data": {"section": "transactions", "openModal": True}}],
+                confidence=0.95
+            )
+        elif any(k in query_lower for k in ["abrir orçamento", "abrir orcamento", "ver orçamento", "ver orcamento", "orçamento", "orcamento"]):
+            return AIAgentResponse(
+                response='Abrindo Orçamento.',
+                actions=[{"type": "navigate_to_section", "data": {"section": "budget", "openModal": False}}],
+                confidence=0.95
+            )
+        elif any(k in query_lower for k in ["abrir metas", "abrir meta", "ver metas", "ver meta", "metas"]):
+            return AIAgentResponse(
+                response='Abrindo Metas.',
+                actions=[{"type": "navigate_to_section", "data": {"section": "goals", "openModal": False}}],
+                confidence=0.95
+            )
+        elif any(k in query_lower for k in ["relatório", "relatorio", "report", "análise completa", "analise completa"]):
             # Gerar relatório completo
             try:
                 # Obter dados diretamente
