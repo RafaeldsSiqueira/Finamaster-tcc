@@ -140,4 +140,3 @@ python app.py
 - ✅ **Documentação**: Centralizada e organizada
 - ✅ **Flexibilidade**: Use o que precisar quando precisar
 
-**🚀 Agora o projeto está organizado e fácil de usar!**
