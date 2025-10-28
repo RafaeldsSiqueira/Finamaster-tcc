@@ -6,16 +6,32 @@ from sqlalchemy import inspect, text
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import os
+from urllib.parse import quote_plus
+from dotenv import load_dotenv
 
+load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Permite requisições cross-origin
 app.config['SECRET_KEY'] = 'sua_chave_secreta_aqui'
-# Unifica a base: usar o arquivo em instance/finanmaster.db
-# Usar caminho absoluto para evitar erros de abertura do arquivo SQLite
-basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'instance', 'finanmaster.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
+
+# Configuração do MySQL via variáveis de ambiente
+DB_USER = os.getenv('DB_USER', 'root')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = os.getenv('DB_PORT', '3306')
+DB_NAME = os.getenv('DB_NAME', 'finanmaster')
+
+mysql_uri = (
+    f"mysql+pymysql://{quote_plus(DB_USER)}:{quote_plus(DB_PASSWORD)}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+)
+app.config['SQLALCHEMY_DATABASE_URI'] = mysql_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 280,
+    'pool_size': 10,
+    'max_overflow': 20,
+}
 
 db = SQLAlchemy(app)
 # Identidade do usuário atual
@@ -54,6 +70,11 @@ class User(db.Model):
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
 class Transaction(db.Model):
+    __tablename__ = 'transactions'
+    __table_args__ = {
+        'mysql_engine': 'InnoDB',
+        'mysql_charset': 'utf8mb4',
+    }
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     value = db.Column(db.Float, nullable=False)
@@ -61,9 +82,14 @@ class Transaction(db.Model):
     type = db.Column(db.String(20), nullable=False)  # Receita ou Despesa
     date = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
 
 class Goal(db.Model):
+    __tablename__ = 'goals'
+    __table_args__ = {
+        'mysql_engine': 'InnoDB',
+        'mysql_charset': 'utf8mb4',
+    }
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     target = db.Column(db.Float, nullable=False)
@@ -71,9 +97,14 @@ class Goal(db.Model):
     deadline = db.Column(db.DateTime, nullable=False)
     icon = db.Column(db.String(50), default='fas fa-bullseye')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
 
 class Budget(db.Model):
+    __tablename__ = 'budgets'
+    __table_args__ = {
+        'mysql_engine': 'InnoDB',
+        'mysql_charset': 'utf8mb4',
+    }
     id = db.Column(db.Integer, primary_key=True)
     category = db.Column(db.String(100), nullable=False)
     budget_amount = db.Column(db.Float, nullable=False)
@@ -81,7 +112,7 @@ class Budget(db.Model):
     month = db.Column(db.Integer, nullable=False)
     year = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
 
 
 def get_current_user_id() -> int | None:
@@ -288,6 +319,32 @@ def add_transaction():
         db.session.add(transaction)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Transação adicionada com sucesso!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
+def update_transaction(transaction_id):
+    """Atualiza uma transação existente do usuário logado"""
+    try:
+        data = request.get_json(force=True)
+        transaction = Transaction.query.filter_by(id=transaction_id, user_id=get_current_user_id()).first_or_404()
+
+        if 'description' in data:
+            transaction.description = str(data['description'])
+        if 'value' in data:
+            transaction.value = float(data['value'])
+        if 'category' in data:
+            transaction.category = str(data['category'])
+        if 'type' in data:
+            transaction.type = str(data['type'])
+        if 'date' in data and data['date']:
+            try:
+                transaction.date = datetime.strptime(data['date'], '%Y-%m-%d')
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Data inválida. Use o formato YYYY-MM-DD.'}), 400
+
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Transação atualizada com sucesso!'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 400
 
@@ -510,27 +567,4 @@ def populate_sample_data():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        # Migração automática: garantir coluna password_hint
-        try:
-            insp = db.inspect(db.engine)
-            cols = [c['name'] for c in insp.get_columns('users')]
-            if 'password_hint' not in cols:
-                db.session.execute(text('ALTER TABLE users ADD COLUMN password_hint VARCHAR(255)'))
-                db.session.commit()
-        except Exception:
-            pass
-        # Migração automática: adicionar user_id nas tabelas se faltar
-        try:
-            insp = db.inspect(db.engine)
-            for table in ('transaction', 'goal', 'budget'):
-                cols = [c['name'] for c in insp.get_columns(table)]
-                if 'user_id' not in cols:
-                    # "transaction" é palavra reservada; precisa de aspas na instrução SQL
-                    tname = '"transaction"' if table == 'transaction' else table
-                    db.session.execute(text(f'ALTER TABLE {tname} ADD COLUMN user_id INTEGER'))
-            db.session.commit()
-        except Exception:
-            pass
-        populate_sample_data()
-    
     app.run(debug=True, host='0.0.0.0', port=5001)

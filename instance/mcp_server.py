@@ -3,12 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import json
-import sqlite3
+import pymysql
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
+# Garantir carregamento do .env na raiz do projeto, mesmo executando a partir de instance/
+ROOT_ENV = Path(__file__).resolve().parents[1] / '.env'
+load_dotenv(dotenv_path=str(ROOT_ENV))
 app = FastAPI(title="FinanMaster MCP", version="1.0.0")
 
 # Configurar CORS
@@ -45,22 +50,36 @@ class AIAgentResponse(BaseModel):
     actions: List[Dict[str, Any]]
     confidence: float
 
-# Configuração do banco de dados
-# Usar sempre o banco dentro da própria pasta instance
-DB_PATH = str(Path(__file__).with_name("finanmaster.db"))
+# Configuração do banco de dados (MySQL, mesmo .env do app Flask)
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "finanmaster")
 
 def get_db_connection():
-    """Cria conexão com o banco de dados"""
-    return sqlite3.connect(DB_PATH)
+    """Cria conexão com o banco de dados MySQL"""
+    return pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        charset="utf8mb4",
+        autocommit=True,
+        cursorclass=pymysql.cursors.Cursor,
+    )
 
 def execute_query(query: str, params: tuple = ()) -> List[tuple]:
     """Executa query no banco de dados"""
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(query, params)
-    results = cursor.fetchall()
-    conn.close()
-    return results
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            return results
+    finally:
+        conn.close()
 
 # Mensagem padrão quando não há dados
 def no_data_message() -> str:
@@ -73,58 +92,38 @@ def no_data_message() -> str:
     )
 
 def get_transactions_data(period: str = "current_month", user_id: Optional[int] = None) -> pd.DataFrame:
-    """Obtém dados de transações como DataFrame"""
-    if period == "current_month":
-        query = """
-        SELECT description, value, category, type, date, created_at
-        FROM "transaction"
-        WHERE strftime('%Y-%m', date) = strftime('%Y-%m', 'now')
-        ORDER BY date DESC
-        """
-    elif period == "last_3_months":
-        query = """
-        SELECT description, value, category, type, date, created_at
-        FROM "transaction"
-        WHERE date >= date('now', '-3 months')
-        ORDER BY date DESC
-        """
-    elif period == "last_6_months":
-        query = """
-        SELECT description, value, category, type, date, created_at
-        FROM "transaction"
-        WHERE date >= date('now', '-6 months')
-        ORDER BY date DESC
-        """
-    else:
-        query = """
-        SELECT description, value, category, type, date, created_at
-        FROM  "transaction"
-        ORDER BY date DESC
-        """
-    
+    """Obtém dados de transações como DataFrame (filtragem de período feita em pandas para evitar diferenças de timezone)."""
+    params: List[Any] = []
+    query = (
+        "SELECT description, value, category, `type`, `date`, created_at, user_id "
+        "FROM transactions"
+    )
+    if user_id is not None:
+        query += " WHERE user_id = %s"
+        params.append(user_id)
+    query += " ORDER BY `date` DESC"
+
     try:
-        # Filtro por usuário se disponível (coluna user_id existe nas tabelas)
-        if user_id is not None:
-            if "WHERE" in query:
-                query += " AND user_id = ?"
-            else:
-                query += " WHERE user_id = ?"
-            results = execute_query(query, (user_id,))
-        else:
-            results = execute_query(query)
-        if results:
-            df = pd.DataFrame(results, columns=['description', 'value', 'category', 'type', 'date', 'created_at'])
-            # Converter colunas para tipos corretos
-            df['date'] = pd.to_datetime(df['date'], errors='coerce')
-            df['value'] = pd.to_numeric(df['value'], errors='coerce')
-            # Remover linhas com datas inválidas
-            df = df.dropna(subset=['date'])
-            return df
-        else:
+        results = execute_query(query, tuple(params))
+        if not results:
             return pd.DataFrame(columns=['description', 'value', 'category', 'type', 'date', 'created_at'])
+
+        df = pd.DataFrame(results, columns=['description', 'value', 'category', 'type', 'date', 'created_at', 'user_id'])
+        df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df['value'] = pd.to_numeric(df['value'], errors='coerce')
+        df = df.dropna(subset=['date'])
+
+        now = pd.Timestamp.now()
+        if period == 'current_month':
+            df = df[(df['date'].dt.year == now.year) & (df['date'].dt.month == now.month)]
+        elif period == 'last_3_months':
+            df = df[df['date'] >= now - pd.DateOffset(months=3)]
+        elif period == 'last_6_months':
+            df = df[df['date'] >= now - pd.DateOffset(months=6)]
+
+        return df[['description', 'value', 'category', 'type', 'date', 'created_at']]
     except Exception as e:
         print(f"Erro ao obter dados: {e}")
-        # Retornar DataFrame vazio sem chamar get_transactions_data novamente
         return pd.DataFrame(columns=['description', 'value', 'category', 'type', 'date', 'created_at'])
 
 def generate_insights(df: pd.DataFrame) -> List[str]:
@@ -237,10 +236,16 @@ async def generate_report(request: ReportRequest):
     try:
         # Obter dados
         df = get_transactions_data(request.period, request.user_id)
-        print(f"DataFrame shape: {df.shape}")
-        print(f"DataFrame columns: {df.columns.tolist()}")
-        print(f"Date column dtype: {df['date'].dtype if 'date' in df.columns else 'N/A'}")
-        print(f"Date column sample: {df['date'].head() if 'date' in df.columns else 'N/A'}")
+        # Logs de diagnóstico
+        print("[MCP] /reports/generate",
+              "user_id=", request.user_id,
+              "period=", request.period,
+              "rows=", 0 if df is None else len(df))
+        if df is not None and not df.empty:
+            try:
+                print("[MCP] first_rows:", df[['description','value','category','type','date']].head(3).to_dict('records'))
+            except Exception:
+                pass
         
         # Filtrar por categorias se especificado
         if request.categories:
@@ -260,9 +265,10 @@ async def generate_report(request: ReportRequest):
             receitas_categoria = {}
         
         # Dados temporais
-        if not df.empty and 'date' in df.columns and df['date'].dtype.name.startswith('datetime'):
+        if not df.empty and 'date' in df.columns:
             try:
                 df_copy = df.copy()
+                df_copy['date'] = pd.to_datetime(df_copy['date'], errors='coerce')
                 df_copy["month"] = df_copy["date"].dt.to_period("M").astype(str)
                 gastos_mensais = df_copy[df_copy['type'] == 'Despesa'].groupby('month')['value'].sum().to_dict()
             except Exception as e:
@@ -420,7 +426,7 @@ async def analyze_with_ai(request: AIAgentRequest):
         
         elif "meta" in query_lower or "objetivo" in query_lower:
             # Verificar metas no banco
-            goals_query = "SELECT title, target, current FROM \"goal\""
+            goals_query = "SELECT title, target, current FROM goals"
             goals = execute_query(goals_query)
             
             if goals:

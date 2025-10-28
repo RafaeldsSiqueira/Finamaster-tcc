@@ -7,6 +7,7 @@ let budgetData = [];
 let charts = {};
 let aiResponses = [];
 let currentUserId = null;
+let prefillTransaction = null; // sugestão de preenchimento do formulário de transação
 
 // Configuração da API MCP
 const MCP_API_BASE = 'http://localhost:8000';
@@ -517,7 +518,7 @@ function loadTransactionsTable() {
                 </span>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editTransaction(${transaction.id})">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditTransaction(${transaction.id})">
                     <i class="fas fa-edit"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})">
@@ -930,6 +931,27 @@ function initializeEventListeners() {
             }
         });
     }
+
+    // Prefill do formulário de Nova Transação quando o modal abrir
+    const addTxModal = document.getElementById('addTransactionModal');
+    if (addTxModal) {
+        addTxModal.addEventListener('show.bs.modal', function() {
+            try {
+                if (!prefillTransaction) return;
+                const form = document.getElementById('transactionForm');
+                if (!form) return;
+                const d = prefillTransaction;
+                const today = new Date();
+                const pad = n => String(n).padStart(2, '0');
+                const isoDate = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+                form.querySelector('input[name="description"]').value = d.description || 'Supermercado';
+                form.querySelector('input[name="value"]').value = d.value != null ? d.value : 120.00;
+                form.querySelector('select[name="category"]').value = d.category || 'Alimentação';
+                form.querySelector('select[name="type"]').value = d.type || 'Despesa';
+                form.querySelector('input[name="date"]').value = d.date || isoDate;
+            } catch (_) {}
+        });
+    }
 }
 
 // Adicionar transação
@@ -943,9 +965,12 @@ async function addTransaction(form) {
             type: formData.get('type'),
             date: formData.get('date')
         };
-
-        const response = await fetch('/api/transactions', {
-            method: 'POST',
+        const editId = form.getAttribute('data-edit-id');
+        const isEdit = !!editId;
+        const url = isEdit ? `/api/transactions/${editId}` : '/api/transactions';
+        const method = isEdit ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+            method,
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -959,6 +984,7 @@ async function addTransaction(form) {
             const modal = bootstrap.Modal.getInstance(document.getElementById('addTransactionModal'));
             modal.hide();
             form.reset();
+            form.removeAttribute('data-edit-id');
             
             // Recarregar dados
             await loadDashboardData();
@@ -1129,7 +1155,7 @@ window.filterTransactions = function filterTransactions() {
                     </span>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="editTransaction(${transaction.id})">
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditTransaction(${transaction.id})">
                         <i class="fas fa-edit"></i>
                     </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})">
@@ -1147,9 +1173,24 @@ function formatDate(dateString) {
     return date.toLocaleDateString('pt-BR');
 }
 
-function editTransaction(id) {
-    // Implementar edição de transação
-    alert(`Editando transação ${id} - Funcionalidade em desenvolvimento`);
+function openEditTransaction(id) {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return alert('Transação não encontrada');
+    try {
+        const form = document.getElementById('transactionForm');
+        const modalEl = document.getElementById('addTransactionModal');
+        if (!form || !modalEl) return;
+        form.setAttribute('data-edit-id', String(id));
+        form.querySelector('input[name="description"]').value = tx.description;
+        form.querySelector('input[name="value"]').value = tx.value;
+        form.querySelector('select[name="category"]').value = tx.category;
+        form.querySelector('select[name="type"]').value = tx.type;
+        form.querySelector('input[name="date"]').value = tx.date;
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    } catch (e) {
+        alert('Falha ao abrir edição');
+    }
 }
 
 // Atualizar dados a cada 30 segundos
@@ -1164,6 +1205,7 @@ async function sendMessage() {
     const message = input.value.trim();
     
     if (!message) return;
+    await ensureCurrentUser();
     
     // Adicionar mensagem do usuário
     addMessageToChat('user', message);
@@ -1329,17 +1371,18 @@ function executeActions(actions) {
                 suggestGoals();
                 break;
             case 'prompt_add_data':
-                // Levar usuário ao cadastro de nova transação
-                try {
-                    const link = document.querySelector('.nav-link[data-section="transactions"]');
-                    if (link) link.click();
-                    const el = document.getElementById('addTransactionModal');
-                    if (el && window.bootstrap) { new bootstrap.Modal(el).show(); }
-                } catch (_) {}
+                // Configurar sugestão de preenchimento para a versão demo
+                prefillTransaction = {
+                    description: 'Supermercado',
+                    value: 120.00,
+                    category: 'Alimentação',
+                    type: 'Despesa',
+                    // data será definida para hoje ao abrir o modal, se não vier aqui
+                };
+                showToastNotification('Sugestão pronta: ao abrir "Nova Transação" os campos virão preenchidos.', 'info');
                 break;
             case 'navigate_to_section': {
                 const section = action.data?.section;
-                const openModal = !!action.data?.openModal;
                 const selector = {
                     'dashboard': '.nav-link[data-section="dashboard"]',
                     'transactions': '.nav-link[data-section="transactions"]',
@@ -1350,11 +1393,12 @@ function executeActions(actions) {
                 if (selector) {
                     const link = document.querySelector(selector);
                     if (link) link.click();
+                    if (section === 'reports') {
+                        // gerar automaticamente após navegar
+                        setTimeout(() => { try { generateReport(); } catch(_) {} }, 300);
+                    }
                 }
-                if (openModal) {
-                    const el = document.getElementById('addTransactionModal');
-                    if (el && window.bootstrap) { try { new bootstrap.Modal(el).show(); } catch(e) {} }
-                }
+                // Não abrir modais automaticamente
                 break;
             }
         }
@@ -1419,7 +1463,17 @@ window.quickAction = async function quickAction(action) {
 }
 
 // Atualizar insights rápidos
+async function ensureCurrentUser() {
+    if (currentUserId) return currentUserId;
+    try {
+        const me = await fetch('/api/me').then(r => r.json());
+        if (me && me.authenticated) currentUserId = me.user_id;
+    } catch (_) {}
+    return currentUserId;
+}
+
 async function updateQuickInsights() {
+    await ensureCurrentUser();
     try {
         const response = await fetch(`${MCP_API_BASE}/reports/generate`, {
             method: 'POST',
@@ -1429,7 +1483,8 @@ async function updateQuickInsights() {
             body: JSON.stringify({
                 report_type: 'quick_insights',
                 period: 'current_month',
-                insights: true
+                insights: true,
+                user_id: currentUserId || undefined
             })
         });
         
@@ -1483,7 +1538,7 @@ async function updateQuickInsights() {
 }
 
 // Event listener para Enter no chat
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     const chatInput = document.getElementById('chat-input');
     if (chatInput) {
         chatInput.addEventListener('keypress', function(e) {
@@ -1501,14 +1556,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterType = document.getElementById('filter-type');
     if (filterType) filterType.addEventListener('change', () => window.filterTransactions && filterTransactions());
 
-    // Carregar insights iniciais, mas esconder se lista vier vazia
+    // Carregar identidade e só então insights
+    await ensureCurrentUser();
     updateQuickInsights();
-    // Buscar identidade do usuário
-    fetch('/api/me').then(r => r.json()).then(me => {
-        if (me && me.authenticated) {
-            currentUserId = me.user_id;
-        }
-    }).catch(() => {});
 });
 
 // ========== FUNCOES DE IA ==========
@@ -1529,6 +1579,7 @@ function quickChatQuestion(question) {
 
 // Função para gerar relatórios
 async function generateReport() {
+    await ensureCurrentUser();
     const period = document.getElementById('report-period').value;
     const type = document.getElementById('report-type').value;
     const format = document.getElementById('report-format').value;
@@ -1828,32 +1879,59 @@ function updateTrendsChart(data) {
                     label: 'Receitas',
                     data: income,
                     borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                    tension: 0.4
+                    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: false,
+                    tension: 0.35,
+                    cubicInterpolationMode: 'monotone'
                 },
                 {
                     label: 'Despesas',
                     data: expenses,
                     borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    tension: 0.4
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: false,
+                    tension: 0.35,
+                    cubicInterpolationMode: 'monotone'
                 },
                 {
                     label: 'Saldo',
                     data: balance,
                     borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.4
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    fill: false,
+                    tension: 0.35,
+                    cubicInterpolationMode: 'monotone'
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: {
+                    position: 'top',
                     labels: {
                         color: '#1a202c'
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(ctx) {
+                            const v = ctx.parsed.y || 0;
+                            return `${ctx.dataset.label}: R$ ${v.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                        }
                     }
                 }
             },
@@ -1865,12 +1943,12 @@ function updateTrendsChart(data) {
                         callback: function(value) {
                             return 'R$ ' + value.toLocaleString('pt-BR');
                         }
-                    }
+                    },
+                    grid: { color: '#e5e7eb' }
                 },
                 x: {
-                    ticks: {
-                        color: '#1a202c'
-                    }
+                    ticks: { color: '#1a202c' },
+                    grid: { color: '#f1f5f9' }
                 }
             }
         }
