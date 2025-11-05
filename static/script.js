@@ -1,4 +1,3 @@
-
 // Variáveis globais para armazenar dados
 let dashboardData = {};
 let transactions = [];
@@ -26,6 +25,15 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
     initializeAnimations();
     initializeTooltips();
+    
+    // Atalho de teclado Ctrl+F ou Cmd+F para busca
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+F (Windows/Linux) ou Cmd+F (Mac)
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault(); // Prevenir o padrão do navegador
+            openPageSearch();
+        }
+    });
 });
 
 // Navegação entre seções
@@ -68,6 +76,17 @@ function initializeNavigation() {
                 // Limpar gráficos ao sair da seção de relatórios
                 if (targetSection !== 'reports') {
                     clearAllCharts();
+                }
+                
+                // Recarregar dados ao entrar em seções específicas
+                if (targetSection === 'transactions') {
+                    loadTransactions();
+                } else if (targetSection === 'goals') {
+                    loadGoals();
+                } else if (targetSection === 'budget') {
+                    loadBudget();
+                } else if (targetSection === 'dashboard') {
+                    loadDashboardData();
                 }
                 
                 // Animate section entrance
@@ -205,12 +224,7 @@ function initializeQuickActions() {
     
     if (searchBtn) {
         searchBtn.addEventListener('click', function() {
-            // Focus on search input if available
-            const searchInput = document.querySelector('input[type="search"], #search-transaction');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.scrollIntoView({ behavior: 'smooth' });
-            }
+            openPageSearch();
         });
     }
     
@@ -218,6 +232,353 @@ function initializeQuickActions() {
         notificationBtn.addEventListener('click', function() {
             showToastNotification('Nenhuma notificação nova', 'info');
         });
+    }
+}
+
+// Função para abrir busca na página (similar ao Ctrl+F)
+let pageSearchInstance = null;
+
+function openPageSearch() {
+    // Se já existe uma instância, apenas focar nela
+    if (pageSearchInstance) {
+        const searchInput = document.getElementById('page-search-input');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+            return;
+        }
+    }
+    
+    // Criar barra de busca
+    const searchBar = document.createElement('div');
+    searchBar.id = 'page-search-bar';
+    searchBar.innerHTML = `
+        <div class="page-search-container">
+            <div class="page-search-input-wrapper">
+                <i class="fas fa-search"></i>
+                <input 
+                    type="text" 
+                    id="page-search-input" 
+                    class="page-search-input" 
+                    placeholder="Buscar na página..."
+                    autocomplete="off"
+                />
+                <div class="page-search-info" id="page-search-info">
+                    <span id="page-search-count">0</span> resultados
+                </div>
+                <button class="page-search-btn" id="page-search-prev" title="Anterior (Shift+Enter)">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+                <button class="page-search-btn" id="page-search-next" title="Próximo (Enter)">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <button class="page-search-btn" id="page-search-close" title="Fechar (ESC)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(searchBar);
+    pageSearchInstance = searchBar;
+    
+    const searchInput = document.getElementById('page-search-input');
+    const searchInfo = document.getElementById('page-search-info');
+    const searchCount = document.getElementById('page-search-count');
+    const prevBtn = document.getElementById('page-search-prev');
+    const nextBtn = document.getElementById('page-search-next');
+    const closeBtn = document.getElementById('page-search-close');
+    
+    let currentMatchIndex = -1;
+    let matches = [];
+    
+    // Função para destacar resultados
+    function highlightMatches(searchText) {
+        // Limpar array de matches antes de recriar
+        matches = [];
+        
+        // Remover destaques anteriores - restaurar texto original
+        document.querySelectorAll('.page-search-highlight, .page-search-highlight-active').forEach(el => {
+            const parent = el.parentNode;
+            if (parent) {
+                // Criar nó de texto com o conteúdo do highlight
+                const textNode = document.createTextNode(el.textContent);
+                parent.replaceChild(textNode, el);
+                parent.normalize();
+            }
+        });
+        
+        if (!searchText || searchText.trim().length === 0) {
+            searchInfo.style.display = 'none';
+            matches = [];
+            currentMatchIndex = -1;
+            return;
+        }
+        
+        searchInfo.style.display = 'flex';
+        
+        // Buscar em todo o conteúdo visível (exceto inputs, scripts, etc)
+        const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: function(node) {
+                    // Ignorar nós dentro de scripts, styles, inputs, textareas
+                    const parent = node.parentElement;
+                    if (!parent) return NodeFilter.FILTER_REJECT;
+                    
+                    const tagName = parent.tagName.toLowerCase();
+                    if (['script', 'style', 'input', 'textarea', 'select', 'noscript'].includes(tagName)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    
+                    // Ignorar se já está dentro de um highlight
+                    if (parent.closest('.page-search-highlight')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }
+        );
+        
+        const textNodes = [];
+        let node;
+        while (node = walker.nextNode()) {
+            textNodes.push(node);
+        }
+        
+        matches = [];
+        
+        textNodes.forEach(textNode => {
+            const text = textNode.textContent;
+            
+            // Verificar se o texto contém a busca (case-insensitive)
+            if (!text.toLowerCase().includes(searchText.toLowerCase())) return;
+            
+            const parent = textNode.parentElement;
+            const originalText = textNode.textContent;
+            
+            // Criar regex novo para não interferir com o anterior
+            const matchRegex = new RegExp(searchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            const allMatches = [...originalText.matchAll(matchRegex)];
+            
+            if (allMatches.length === 0) return;
+            
+            const fragment = document.createDocumentFragment();
+            let lastIndex = 0;
+            
+            allMatches.forEach((match) => {
+                // Adicionar texto antes do match
+                if (match.index > lastIndex) {
+                    fragment.appendChild(document.createTextNode(originalText.substring(lastIndex, match.index)));
+                }
+                
+                // Adicionar highlight do match
+                const highlight = document.createElement('mark');
+                highlight.className = 'page-search-highlight';
+                highlight.textContent = match[0];
+                matches.push(highlight);
+                fragment.appendChild(highlight);
+                
+                lastIndex = match.index + match[0].length;
+            });
+            
+            // Adicionar texto restante após o último match
+            if (lastIndex < originalText.length) {
+                fragment.appendChild(document.createTextNode(originalText.substring(lastIndex)));
+            }
+            
+            parent.replaceChild(fragment, textNode);
+        });
+        
+        if (matches.length > 0) {
+            searchCount.textContent = matches.length;
+            currentMatchIndex = 0;
+            // Pequeno delay para garantir que os elementos foram renderizados
+            setTimeout(() => {
+                scrollToMatch(0);
+            }, 100);
+        } else {
+            searchCount.textContent = '0';
+            currentMatchIndex = -1;
+        }
+    }
+    
+    // Função para rolar até o match
+    function scrollToMatch(index) {
+        if (index < 0 || index >= matches.length || matches.length === 0) {
+            return;
+        }
+        
+        // Obter todos os highlights atuais do DOM (caso o array esteja desatualizado)
+        const allHighlights = Array.from(document.querySelectorAll('.page-search-highlight, .page-search-highlight-active'));
+        
+        // Se não encontramos highlights no DOM, algo deu errado
+        if (allHighlights.length === 0) {
+            console.warn('Nenhum highlight encontrado no DOM. Recarregando busca...');
+            return;
+        }
+        
+        // Remover highlight ativo de todos os elementos
+        allHighlights.forEach((highlight) => {
+            if (highlight && highlight.classList) {
+                highlight.classList.remove('page-search-highlight-active');
+                highlight.classList.add('page-search-highlight');
+            }
+        });
+        
+        // Selecionar o match atual (usar índice relativo se o array não corresponder ao DOM)
+        let activeMatch;
+        if (index < allHighlights.length) {
+            activeMatch = allHighlights[index];
+        } else if (index < matches.length && matches[index]) {
+            activeMatch = matches[index];
+        } else {
+            console.warn('Índice de match inválido:', index);
+            return;
+        }
+        
+        // Verificar se o elemento ainda existe no DOM
+        if (!activeMatch || !activeMatch.isConnected) {
+            console.warn('Match não está mais no DOM. Recarregando busca...');
+            // Recarregar highlights
+            const currentSearchText = searchInput.value;
+            if (currentSearchText) {
+                highlightMatches(currentSearchText);
+                if (matches.length > 0) {
+                    scrollToMatch(Math.min(index, matches.length - 1));
+                }
+            }
+            return;
+        }
+        
+        // Aplicar classe ativa
+        activeMatch.classList.remove('page-search-highlight');
+        activeMatch.classList.add('page-search-highlight-active');
+        
+        // Forçar reflow para garantir que as classes foram aplicadas
+        void activeMatch.offsetHeight;
+        
+        // Função auxiliar para fazer scroll até o elemento
+        const scrollToElement = (element) => {
+            if (!element) return;
+            
+            // Obter posição do elemento
+            const rect = element.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+            
+            // Calcular posição central considerando a altura da barra de busca
+            const searchBarHeight = pageSearchInstance ? pageSearchInstance.offsetHeight : 80;
+            const elementTop = rect.top + scrollTop;
+            const elementLeft = rect.left + scrollLeft;
+            
+            // Calcular posição central na viewport
+            const centerY = window.innerHeight / 2;
+            const targetY = elementTop - centerY + (rect.height / 2) + searchBarHeight;
+            
+            // Fazer scroll usando window.scrollTo para mais controle
+            window.scrollTo({
+                top: Math.max(0, targetY),
+                left: elementLeft,
+                behavior: 'smooth'
+            });
+            
+            // Garantir visibilidade após scroll (fallback)
+            setTimeout(() => {
+                if (element && element.isConnected) {
+                    element.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center',
+                        inline: 'nearest'
+                    });
+                }
+            }, 150);
+        };
+        
+        // Executar scroll
+        scrollToElement(activeMatch);
+        
+        currentMatchIndex = index;
+        
+        // Atualizar contador mostrando qual resultado está sendo exibido
+        if (allHighlights.length > 0) {
+            searchCount.textContent = `${index + 1} de ${allHighlights.length}`;
+        }
+    }
+    
+    // Event listeners
+    searchInput.addEventListener('input', function() {
+        highlightMatches(this.value);
+    });
+    
+    prevBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (matches.length === 0) {
+            showToastNotification('Nenhum resultado encontrado', 'info');
+            return;
+        }
+        const newIndex = currentMatchIndex <= 0 ? matches.length - 1 : currentMatchIndex - 1;
+        scrollToMatch(newIndex);
+    });
+    
+    nextBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (matches.length === 0) {
+            showToastNotification('Nenhum resultado encontrado', 'info');
+            return;
+        }
+        const newIndex = currentMatchIndex >= matches.length - 1 ? 0 : currentMatchIndex + 1;
+        scrollToMatch(newIndex);
+    });
+    
+    closeBtn.addEventListener('click', closePageSearch);
+    
+    // Atalhos de teclado
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                prevBtn.click();
+            } else {
+                nextBtn.click();
+            }
+        } else if (e.key === 'Escape') {
+            closePageSearch();
+        }
+    });
+    
+    // Focar no input
+    setTimeout(() => {
+        searchInput.focus();
+        searchInput.select();
+    }, 100);
+    
+    // Fechar ao clicar fora (mas manter se clicar dentro)
+    searchBar.addEventListener('click', function(e) {
+        if (e.target === searchBar) {
+            closePageSearch();
+        }
+    });
+}
+
+function closePageSearch() {
+    // Remover destaques
+    document.querySelectorAll('.page-search-highlight, .page-search-highlight-active').forEach(el => {
+        const parent = el.parentNode;
+        if (parent) {
+            parent.replaceChild(document.createTextNode(el.textContent), el);
+            parent.normalize();
+        }
+    });
+    
+    // Remover barra de busca
+    if (pageSearchInstance) {
+        pageSearchInstance.remove();
+        pageSearchInstance = null;
     }
 }
 
@@ -438,18 +799,85 @@ function showToastNotification(message, type = 'info') {
 
 // Carregar transações
 async function loadTransactions() {
+    const tbody = document.getElementById('transactions-table');
+    
+    // Mostrar indicador de carregamento
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-3 mb-0 text-muted">Carregando transações...</p>
+                </td>
+            </tr>
+        `;
+    }
+    
     try {
-        const response = await fetch('/api/transactions');
-        transactions = await response.json();
+        // Garantir que o usuário está autenticado
+        await ensureCurrentUser();
         
-        // Carregar transações recentes
+        if (!currentUserId) {
+            console.warn('⚠️  Usuário não autenticado. Redirecionando para login...');
+            window.location.href = '/login';
+            return;
+        }
+        
+        console.log(`🔄 Carregando transações da API para usuário ${currentUserId}...`);
+        const startTime = performance.now();
+        
+        const response = await fetch('/api/transactions', {
+            credentials: 'include' // Incluir cookies de sessão
+        });
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                console.warn('⚠️  Sessão expirada. Redirecionando para login...');
+                window.location.href = '/login';
+                return;
+            }
+            throw new Error(`Erro HTTP: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const loadTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        
+        // Verificar se é um array ou objeto com erro
+        if (Array.isArray(data)) {
+            transactions = data;
+        } else if (data.transactions) {
+            transactions = data.transactions;
+        } else if (data.error) {
+            throw new Error(data.error);
+        } else {
+            transactions = [];
+        }
+        
+        console.log(`✅ ${transactions.length} transações carregadas em ${loadTime}s`);
+        
+        // Carregar transações recentes (sem esperar)
         loadRecentTransactions();
         
-        // Carregar tabela de transações
+        // Carregar tabela de transações de forma otimizada
         loadTransactionsTable();
         
     } catch (error) {
-        console.error('Erro ao carregar transações:', error);
+        console.error('❌ Erro ao carregar transações:', error);
+        // Mostrar mensagem de erro na tabela
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-danger py-4">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p class="mb-0">Erro ao carregar transações</p>
+                        <small>${error.message}</small>
+                        <br><small class="text-muted">Verifique o console do navegador para mais detalhes</small>
+                    </td>
+                </tr>
+            `;
+        }
     }
 }
 
@@ -470,6 +898,10 @@ async function loadBudget() {
         const response = await fetch('/api/budget');
         budgetData = await response.json();
         loadBudgetCategories();
+        // Atualizar gráfico de orçamento se já foi inicializado
+        if (charts.budget && budgetData.length > 0) {
+            updateCharts();
+        }
     } catch (error) {
         console.error('Erro ao carregar orçamento:', error);
     }
@@ -499,35 +931,95 @@ function loadRecentTransactions() {
     `).join('');
 }
 
-// Carregar tabela de transações
+// Carregar tabela de transações (renderização otimizada)
 function loadTransactionsTable() {
     const tbody = document.getElementById('transactions-table');
-    if (!tbody) return;
+    if (!tbody) {
+        console.error('Elemento transactions-table não encontrado no DOM');
+        return;
+    }
 
-    tbody.innerHTML = transactions.map(transaction => `
-        <tr>
-            <td>${formatDate(transaction.date)}</td>
-            <td>${transaction.description}</td>
-            <td>${transaction.category}</td>
-            <td class="${transaction.type === 'Receita' ? 'text-receita' : 'text-despesa'}">
-                ${transaction.type === 'Receita' ? '+' : '-'} R$ ${transaction.value.toFixed(2)}
-            </td>
-            <td>
-                <span class="badge ${transaction.type === 'Receita' ? 'bg-success' : 'bg-danger'}">
-                    ${transaction.type}
-                </span>
-            </td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditTransaction(${transaction.id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        </tr>
-    `).join('');
-}
+    if (!transactions || transactions.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted py-4">
+                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                    <p class="mb-0">Nenhuma transação cadastrada</p>
+                    <small>Clique em "Nova Transação" para adicionar</small>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    console.log(`🔄 Renderizando ${transactions.length} transações na tabela...`);
+    const renderStartTime = performance.now();
+    
+    // Renderizar em chunks para não travar o navegador
+    const CHUNK_SIZE = 50; // Renderizar 50 de cada vez
+    const chunks = [];
+    
+    for (let i = 0; i < transactions.length; i += CHUNK_SIZE) {
+        chunks.push(transactions.slice(i, i + CHUNK_SIZE));
+    }
+    
+    // Limpar tbody primeiro
+    tbody.innerHTML = '';
+    
+    // Renderizar primeiro chunk imediatamente
+    let currentChunkIndex = 0;
+    
+    function renderChunk(chunkIndex) {
+        if (chunkIndex >= chunks.length) {
+            const renderTime = ((performance.now() - renderStartTime) / 1000).toFixed(2);
+            console.log(`✅ Tabela renderizada em ${renderTime}s`);
+            return;
+        }
+        
+        const chunk = chunks[chunkIndex];
+        const fragment = document.createDocumentFragment();
+        
+            chunk.forEach(transaction => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${formatDate(transaction.date)}</td>
+                    <td>${transaction.description}</td>
+                    <td>${transaction.category}</td>
+                    <td class="${transaction.type === 'Receita' ? 'text-receita' : 'text-despesa'}">
+                        ${transaction.type === 'Receita' ? '+' : '-'} R$ ${transaction.value.toFixed(2)}
+                    </td>
+                    <td>
+                        <span class="badge ${transaction.type === 'Receita' ? 'bg-success' : 'bg-danger'}">
+                            ${transaction.type}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditTransaction(${transaction.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction(${transaction.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                fragment.appendChild(row);
+            });
+            
+            // Adicionar fragment ao tbody
+            tbody.appendChild(fragment);
+            
+            // Renderizar próximo chunk de forma assíncrona
+            if (chunkIndex + 1 < chunks.length) {
+                // Usar requestAnimationFrame para não travar o navegador
+                requestAnimationFrame(() => {
+                    setTimeout(() => renderChunk(chunkIndex + 1), 10);
+                });
+            }
+        }
+        
+        // Iniciar renderização do primeiro chunk
+        renderChunk(0);
+    }
 
 // Carregar metas
 function loadGoalsContainer() {
@@ -576,6 +1068,11 @@ function loadBudgetCategories() {
     const container = document.getElementById('budget-categories');
     if (!container) return;
 
+    if (!budgetData || budgetData.length === 0) {
+        container.innerHTML = '<p class="text-muted text-center">Nenhum orçamento cadastrado. Clique em "+ DEFINIR ORÇAMENTO" para criar.</p>';
+        return;
+    }
+
     container.innerHTML = budgetData.map(item => {
         const statusClass = item.progress > 90 ? 'text-danger' : item.progress > 70 ? 'text-warning' : 'text-success';
         
@@ -583,7 +1080,7 @@ function loadBudgetCategories() {
             <div class="mb-3">
                 <div class="d-flex justify-content-between mb-1">
                     <span>${item.category}</span>
-                    <span class="${statusClass}">R$ ${item.spent} / R$ ${item.budget}</span>
+                    <span class="${statusClass}">R$ ${item.spent.toFixed(2)} / R$ ${item.budget.toFixed(2)}</span>
                 </div>
                 <div class="progress" style="height: 6px;">
                     <div class="progress-bar ${item.progress > 90 ? 'bg-danger' : item.progress > 70 ? 'bg-warning' : 'bg-success'}" 
@@ -1207,7 +1704,11 @@ async function sendMessage() {
     if (!message) return;
     await ensureCurrentUser();
     
-    // Adicionar mensagem do usuário
+    // Normalizar mensagem para lowercase para comparações de comandos
+    const messageLower = message.toLowerCase().trim();
+    console.log('📤 Enviando mensagem:', message, '(normalizada:', messageLower + ')');
+    
+    // Adicionar mensagem do usuário (usar mensagem original para exibição)
     addMessageToChat('user', message);
     input.value = '';
     
@@ -1215,22 +1716,93 @@ async function sendMessage() {
     showTypingIndicator();
     
     try {
-        // Enviar para o MCP
-        const response = await fetch(`${MCP_API_BASE}/ai/analyze`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ query: message, user_id: currentUserId || undefined })
-        });
+        // Para comandos de ajuda/comandos, usar Flask diretamente (tem lógica completa)
+        const helpCommands = ['ajuda', 'help', 'comandos', 'comando', 'menu', 'opções'];
+        const isHelpCommand = helpCommands.some(cmd => messageLower.includes(cmd));
         
-        const result = await response.json();
+        let response;
+        let result;
+        
+        // Se for comando de ajuda, usar Flask diretamente
+        if (isHelpCommand) {
+            console.log('📋 Detectado comando de ajuda, usando Flask diretamente');
+            response = await fetch(`${FLASK_API_BASE}/api/ai/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ query: messageLower, user_id: currentUserId || undefined })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao processar mensagem');
+            }
+            
+            result = await response.json();
+            console.log('✅ Resposta recebida via Flask (comando ajuda):', result);
+        } else {
+            // Para outras mensagens, tentar MCP primeiro, depois Flask
+            try {
+                // Tentar MCP com timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                response = await fetch(`${MCP_API_BASE}/ai/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: messageLower, user_id: currentUserId || undefined }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    result = await response.json();
+                    console.log('✅ Resposta recebida via MCP:', result);
+                    
+                    // Verificar se a resposta do MCP é genérica - se for, tentar Flask
+                    if (result.response && result.response.includes('Posso ajudar você com análises sobre')) {
+                        console.log('⚠️ Resposta genérica do MCP detectada, tentando Flask...');
+                        throw new Error('Generic response from MCP');
+                    }
+                } else {
+                    throw new Error('MCP server error');
+                }
+            } catch (error) {
+                console.warn('MCP server não disponível ou resposta genérica, usando Flask:', error);
+                // Fallback para Flask - enviar messageLower para garantir detecção
+                response = await fetch(`${FLASK_API_BASE}/api/ai/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: messageLower, user_id: currentUserId || undefined })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Erro ao processar mensagem');
+                }
+                
+                result = await response.json();
+                console.log('✅ Resposta recebida via Flask:', result);
+            }
+        }
         
         // Esconder indicador de digitação
         hideTypingIndicator();
         
         // Adicionar resposta da IA
-        addMessageToChat('ai', result.response);
+        if (result.response) {
+            console.log('✅ Resposta recebida:', result.response.substring(0, 100) + '...');
+            addMessageToChat('ai', result.response);
+        } else {
+            console.warn('⚠️ Resposta vazia recebida do servidor');
+            addMessageToChat('ai', 'Desculpe, não consegui processar sua pergunta. Tente novamente.');
+        }
         
         // Executar ações se houver
         if (result.actions && result.actions.length > 0) {
@@ -1259,17 +1831,111 @@ function addMessageToChat(sender, message) {
     // Formatar mensagem da IA
     const formattedMessage = sender === 'ai' ? formatAIResponse(message) : message;
     
-    messageDiv.innerHTML = `
-        <div class="d-flex align-items-start">
-            <i class="${icon} text-primary me-2 mt-1"></i>
-            <div class="${bgClass} p-3 rounded">
-                <div class="mb-0">${formattedMessage}</div>
-                <small class="text-muted d-block mt-1">${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</small>
+    // Definir cor do ícone baseado no sender
+    const iconColor = sender === 'user' ? 'style="color: #ffffff !important;"' : 'style="color: #3b82f6 !important;"';
+    const textColor = sender === 'user' ? 'style="color: #ffffff !important;"' : 'style="color: #1a202c !important;"';
+    const timeColor = sender === 'user' ? 'style="color: rgba(255, 255, 255, 0.8) !important;"' : 'style="color: #6b7280 !important;"';
+    
+    // Para mensagens do usuário, garantir texto branco e ícone branco
+    // Para mensagens da IA, garantir texto escuro e ícone azul
+    if (sender === 'user') {
+        // USUÁRIO: Texto branco, ícone branco, fundo azul
+        const iconStyle = 'color: #ffffff !important; font-size: 1.2rem !important; display: inline-block !important;';
+        const bubbleStyle = 'color: #ffffff !important; background: linear-gradient(135deg, #3b82f6, #2563eb) !important; border: none !important;';
+        
+        // Para mensagens do usuário, usar texto simples (sem HTML complexo) ou processar completamente
+        let processedMessage = message; // Usar mensagem original, não formatada
+        
+        // Se houver HTML, processar para adicionar cor branca em TODOS os elementos
+        if (formattedMessage.includes('<')) {
+            // Criar um elemento temporário para processar HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = formattedMessage;
+            
+            // Aplicar cor branca em TODOS os elementos de texto
+            const allElements = tempDiv.querySelectorAll('*');
+            allElements.forEach(el => {
+                el.style.setProperty('color', '#ffffff', 'important');
+            });
+            
+            // Aplicar também no próprio elemento raiz
+            if (tempDiv.firstChild && tempDiv.firstChild.nodeType === Node.TEXT_NODE) {
+                const wrapper = document.createElement('span');
+                wrapper.style.setProperty('color', '#ffffff', 'important');
+                wrapper.textContent = tempDiv.textContent;
+                tempDiv.innerHTML = '';
+                tempDiv.appendChild(wrapper);
+            }
+            
+            processedMessage = tempDiv.innerHTML;
+        }
+        
+        messageDiv.innerHTML = `
+            <div class="d-flex align-items-start" style="margin-bottom: 12px; justify-content: flex-end;">
+                <div class="${bgClass} p-3 rounded" style="${bubbleStyle}">
+                    <div class="mb-0" style="color: #ffffff !important; font-size: 0.95rem !important; line-height: 1.5 !important;">${processedMessage}</div>
+                    <small class="d-block mt-1" style="color: rgba(255, 255, 255, 0.9) !important;">${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</small>
+                </div>
+                <i class="${icon} ms-2 mt-1" style="${iconStyle}"></i>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        // IA: Texto escuro, ícone azul, fundo branco
+        const iconStyle = 'color: #3b82f6 !important; font-size: 1.2rem !important; display: inline-block !important;';
+        const bubbleStyle = 'color: #1a202c !important; background: transparent !important; border: none !important; box-shadow: none !important;';
+        
+        // Para mensagens da IA, processar HTML mantendo formatação
+        let processedMessage = formattedMessage;
+        
+        // Se houver HTML, garantir cor escura em todos os elementos
+        if (formattedMessage.includes('<')) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = formattedMessage;
+            
+            // Aplicar cor clara em TODOS os elementos de texto
+            const allElements = tempDiv.querySelectorAll('*');
+            allElements.forEach(el => {
+                el.style.setProperty('color', '#1a202c', 'important');
+            });
+            
+            processedMessage = tempDiv.innerHTML;
+        }
+        
+        messageDiv.innerHTML = `
+            <div class="d-flex align-items-start" style="margin-bottom: 12px;">
+                <i class="${icon} me-2 mt-1" style="${iconStyle}"></i>
+                <div class="${bgClass} p-3 rounded" style="${bubbleStyle}">
+                    <div class="mb-0" style="color: #1a202c !important; font-size: 0.95rem !important; line-height: 1.5 !important;">${processedMessage}</div>
+                    <small class="d-block mt-1" style="color: #6b7280 !important;">${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</small>
+                </div>
+            </div>
+        `;
+    }
     
     chatMessages.appendChild(messageDiv);
+    
+    // FORÇAR cores usando DOM direto (após inserir no DOM)
+    setTimeout(() => {
+        if (sender === 'user') {
+            // Forçar texto branco em TODOS os elementos da mensagem do usuário
+            const allUserElements = messageDiv.querySelectorAll('*');
+            allUserElements.forEach(el => {
+                el.style.setProperty('color', '#ffffff', 'important');
+            });
+            // Forçar ícone branco
+            const userIcon = messageDiv.querySelector('i');
+            if (userIcon) userIcon.style.setProperty('color', '#ffffff', 'important');
+        } else {
+            // Forçar texto claro em TODOS os elementos da mensagem da IA
+            const allAiElements = messageDiv.querySelectorAll('.chat-bubble-ai *');
+            allAiElements.forEach(el => {
+                el.style.setProperty('color', '#1a202c', 'important');
+            });
+            // Forçar ícone azul
+            const aiIcon = messageDiv.querySelector('i');
+            if (aiIcon) aiIcon.style.setProperty('color', '#3b82f6', 'important');
+        }
+    }, 10);
     
     // Scroll para baixo
     const chatContainer = document.getElementById('chat-container');
@@ -1294,15 +1960,15 @@ function addMessageToChat(sender, message) {
 function formatAIResponse(text) {
     // Verificar se text existe e é uma string
     if (!text || typeof text !== 'string') {
-        return '<p>Resposta não disponível</p>';
+        return '<p style="color: #1a202c !important;">Resposta não disponível</p>';
     }
     
     // Converter markdown básico para HTML
     let formatted = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/• (.*?)(?=\n|$)/g, '<li>$1</li>')
-        .replace(/\n\n/g, '</p><p>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1a202c !important;">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em style="color: #1a202c !important;">$1</em>')
+        .replace(/• (.*?)(?=\n|$)/g, '<li style="color: #1a202c !important;">$1</li>')
+        .replace(/\n\n/g, '</p><p style="color: #1a202c !important;">')
         .replace(/\n/g, '<br>');
     
     // Adicionar emojis dinâmicos baseados no conteúdo
@@ -1318,7 +1984,7 @@ function formatAIResponse(text) {
         formatted = '💡 ' + formatted;
     }
     
-    return '<p>' + formatted + '</p>';
+    return '<p style="color: #1a202c !important;">' + formatted + '</p>';
 }
 
 // Mostrar indicador de digitação
@@ -1329,8 +1995,8 @@ function showTypingIndicator() {
     typingDiv.id = 'typing-indicator';
     typingDiv.innerHTML = `
         <div class="d-flex align-items-start">
-            <i class="fas fa-robot text-primary me-2 mt-1"></i>
-            <div class="chat-bubble-ai p-3">
+            <i class="fas fa-robot me-2 mt-1" style="color: #3b82f6 !important;"></i>
+            <div class="chat-bubble-ai p-3" style="color:rgb(243, 246, 250) !important; background: transparent !important; border: none !important; box-shadow: none !important;">
                 <div class="dot"></div>
                 <div class="dot"></div>
                 <div class="dot"></div>
@@ -1398,7 +2064,24 @@ function executeActions(actions) {
                         setTimeout(() => { try { generateReport(); } catch(_) {} }, 300);
                     }
                 }
-                // Não abrir modais automaticamente
+                break;
+            }
+            case 'open_modal': {
+                const modalId = action.data?.modal;
+                if (modalId) {
+                    // Aguardar navegação antes de abrir modal
+                    setTimeout(() => {
+                        const modalElement = document.getElementById(modalId);
+                        if (modalElement) {
+                            const modal = new bootstrap.Modal(modalElement);
+                            modal.show();
+                        } else if (modalId === 'add-transaction-modal') {
+                            // Tentar abrir via botão
+                            const addBtn = document.querySelector('[onclick*="addTransaction" i], [data-bs-target="#add-transaction-modal"]');
+                            if (addBtn) addBtn.click();
+                        }
+                    }, 500);
+                }
                 break;
             }
         }
@@ -1465,41 +2148,128 @@ window.quickAction = async function quickAction(action) {
 // Atualizar insights rápidos
 async function ensureCurrentUser() {
     if (currentUserId) return currentUserId;
+    
     try {
-        const me = await fetch('/api/me').then(r => r.json());
-        if (me && me.authenticated) currentUserId = me.user_id;
-    } catch (_) {}
+        const response = await fetch('/api/me', {
+            credentials: 'include' // Incluir cookies de sessão
+        });
+        const me = await response.json();
+        
+        if (me && me.authenticated && me.user_id) {
+            currentUserId = me.user_id;
+            console.log(`✅ Usuário autenticado: ID ${currentUserId}, Username: ${me.username || 'N/A'}`);
+        } else {
+            console.warn('⚠️  Usuário não autenticado');
+            currentUserId = null;
+        }
+    } catch (error) {
+        console.error('❌ Erro ao verificar autenticação:', error);
+        currentUserId = null;
+    }
+    
     return currentUserId;
 }
 
 async function updateQuickInsights() {
     await ensureCurrentUser();
     try {
-        const response = await fetch(`${MCP_API_BASE}/reports/generate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                report_type: 'quick_insights',
-                period: 'current_month',
-                insights: true,
-                user_id: currentUserId || undefined
-            })
-        });
+        // Tentar Flask primeiro (tem dados mais completos), depois MCP
+        let response;
+        let result;
         
-        const result = await response.json();
+        try {
+            response = await fetch(`${FLASK_API_BASE}/api/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    report_type: 'quick_insights',
+                    period: 'current_month',
+                    insights: true,
+                    user_id: currentUserId || undefined
+                }),
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                result = await response.json();
+            } else {
+                throw new Error('Flask error');
+            }
+        } catch (error) {
+            // Fallback para MCP
+            response = await fetch(`${MCP_API_BASE}/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    report_type: 'quick_insights',
+                    period: 'current_month',
+                    insights: true,
+                    user_id: currentUserId || undefined
+                })
+            });
+            
+            result = await response.json();
+        }
         
         const quickInsights = document.getElementById('quick-insights');
         quickInsights.innerHTML = '';
+        
+        // Adicionar resumo financeiro (Receitas, Despesas, Saldo)
+        if (result.data && result.data.summary) {
+            const summary = result.data.summary;
+            const summaryCard = document.createElement('div');
+            summaryCard.style.cssText = 'margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #22c55e;';
+            
+            // Determinar cor do saldo
+            const saldoColor = summary.saldo >= 0 ? '#22c55e' : '#ef4444';
+            const saldoIcon = summary.saldo >= 0 ? 'fa-check-circle' : 'fa-exclamation-triangle';
+            
+            summaryCard.innerHTML = `
+                <div style="color: #1a202c !important; margin-bottom: 10px; display: flex; align-items: center;">
+                    <i class="fas fa-arrow-up" style="color: #22c55e !important; margin-right: 10px !important; font-size: 1.1rem !important; display: inline-block !important; min-width: 20px;"></i>
+                    <strong style="color: #1a202c !important; font-size: 0.95rem !important;">Receitas totais: R$ ${summary.total_receitas.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                </div>
+                <div style="color: #1a202c !important; margin-bottom: 10px; display: flex; align-items: center;">
+                    <i class="fas fa-arrow-down" style="color: #ef4444 !important; margin-right: 10px !important; font-size: 1.1rem !important; display: inline-block !important; min-width: 20px;"></i>
+                    <strong style="color: #1a202c !important; font-size: 0.95rem !important;">Despesas totais: R$ ${summary.total_despesas.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                </div>
+                <div style="color: #1a202c !important; display: flex; align-items: center;">
+                    <i class="fas ${saldoIcon}" style="color: ${saldoColor} !important; margin-right: 10px !important; font-size: 1.1rem !important; display: inline-block !important; min-width: 20px;"></i>
+                    <strong style="color: ${saldoColor} !important; font-size: 0.95rem !important;">Saldo: R$ ${summary.saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>
+                </div>
+            `;
+            quickInsights.appendChild(summaryCard);
+        }
         
         // Adicionar insights principais
         if (Array.isArray(result.insights) && result.insights.length > 0) {
             result.insights.slice(0, 3).forEach(insight => {
                 const insightCard = document.createElement('div');
                 insightCard.className = 'insight-card positive';
+                // Determinar cor do ícone baseado no conteúdo
+                let iconClass = 'fas fa-lightbulb';
+                let iconColor = '#f59e0b'; // amarelo/laranja padrão
+                
+                if (insight.includes('Excelente') || insight.includes('positivo')) {
+                    iconClass = 'fas fa-check-circle';
+                    iconColor = '#22c55e'; // verde para positivo
+                } else if (insight.includes('Atenção') || insight.includes('negativo') || insight.includes('Revise')) {
+                    iconClass = 'fas fa-exclamation-triangle';
+                    iconColor = '#ef4444'; // vermelho para alerta
+                } else if (insight.includes('Maior categoria') || insight.includes('despesa')) {
+                    iconClass = 'fas fa-chart-pie';
+                    iconColor = '#3b82f6'; // azul para análise
+                }
+                
                 insightCard.innerHTML = `
-                    <p class="mb-0"><i class="fas fa-lightbulb"></i> ${insight}</p>
+                    <p class="mb-0" style="color: #1a202c !important; font-size: 0.9rem !important; line-height: 1.5 !important;">
+                        <i class="${iconClass}" style="color: ${iconColor} !important; margin-right: 8px !important; font-size: 1rem !important; display: inline-block !important;"></i> 
+                        <span style="color: #1a202c !important;">${insight}</span>
+                    </p>
                 `;
                 quickInsights.appendChild(insightCard);
             });
@@ -1511,17 +2281,21 @@ async function updateQuickInsights() {
                 const insightCard = document.createElement('div');
                 insightCard.className = 'insight-card warning';
                 insightCard.innerHTML = `
-                    <p class="mb-0"><i class="fas fa-star"></i> ${recommendation}</p>
+                    <p class="mb-0" style="color: #1a202c !important; font-size: 0.9rem !important; line-height: 1.5 !important;">
+                        <i class="fas fa-star" style="color: #f59e0b !important; margin-right: 8px !important; font-size: 1rem !important; display: inline-block !important;"></i> 
+                        <span style="color: #1a202c !important;">${recommendation}</span>
+                    </p>
                 `;
                 quickInsights.appendChild(insightCard);
             });
         }
+        
         // Se nada foi exibido, mostrar orientação para cadastrar dados
         if (quickInsights.children.length === 0) {
             quickInsights.innerHTML = `
                 <div class="text-center">
-                    <i class="fas fa-info-circle text-muted"></i>
-                    <p class="text-muted">Sem dados no período. Cadastre transações para gerar insights.</p>
+                    <i class="fas fa-info-circle" style="color: #6b7280 !important;"></i>
+                    <p style="color: #6b7280 !important;">Sem dados no período. Cadastre transações para gerar insights.</p>
                 </div>
             `;
         }
@@ -1530,15 +2304,43 @@ async function updateQuickInsights() {
         const quickInsights = document.getElementById('quick-insights');
         quickInsights.innerHTML = `
             <div class="text-center">
-                <i class="fas fa-exclamation-triangle text-warning"></i>
-                <p class="text-muted">Erro ao carregar insights</p>
+                <i class="fas fa-exclamation-triangle" style="color: #f59e0b !important;"></i>
+                <p style="color: #6b7280 !important;">Erro ao carregar insights</p>
             </div>
         `;
     }
 }
 
+// Função para corrigir cores de mensagens existentes
+function fixExistingMessageColors() {
+    // Corrigir mensagens do usuário
+    const userMessages = document.querySelectorAll('.user-message');
+    userMessages.forEach(msg => {
+        const allElements = msg.querySelectorAll('*');
+        allElements.forEach(el => {
+            el.style.setProperty('color', '#ffffff', 'important');
+        });
+        const icon = msg.querySelector('i');
+        if (icon) icon.style.setProperty('color', '#ffffff', 'important');
+    });
+    
+    // Corrigir mensagens da IA
+    const aiMessages = document.querySelectorAll('.ai-message');
+    aiMessages.forEach(msg => {
+        const allElements = msg.querySelectorAll('.chat-bubble-ai *');
+        allElements.forEach(el => {
+            el.style.setProperty('color', '#1a202c', 'important');
+        });
+        const icon = msg.querySelector('i');
+        if (icon) icon.style.setProperty('color', '#3b82f6', 'important');
+    });
+}
+
 // Event listener para Enter no chat
 document.addEventListener('DOMContentLoaded', async function() {
+    // Corrigir cores de mensagens existentes ao carregar
+    setTimeout(fixExistingMessageColors, 100);
+    
     const chatInput = document.getElementById('chat-input');
     if (chatInput) {
         chatInput.addEventListener('keypress', function(e) {
@@ -1590,23 +2392,64 @@ async function generateReport() {
         // Mostrar loading
         showLoading('Gerando relatório...');
         
-        const response = await fetch(`${MCP_API_BASE}/reports/generate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                period: period,
-                report_type: type,
-                insights: true,
-                user_id: currentUserId || undefined
-            })
-        });
+        // Tentar primeiro o servidor MCP, depois Flask como fallback
+        let response;
+        let result;
         
-        const result = await response.json();
+        try {
+            // Tentar MCP com timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            response = await fetch(`${MCP_API_BASE}/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    period: period,
+                    report_type: type,
+                    insights: true,
+                    user_id: currentUserId || undefined
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+                result = await response.json();
+                console.log('Relatório gerado via MCP:', result);
+            } else {
+                throw new Error('MCP server error');
+            }
+        } catch (error) {
+            console.warn('MCP server não disponível, usando Flask:', error);
+            // Fallback para Flask
+            response = await fetch(`${FLASK_API_BASE}/api/reports/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    period: period,
+                    report_type: type,
+                    insights: true,
+                    user_id: currentUserId || undefined
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Erro ao gerar relatório');
+            }
+            
+            result = await response.json();
+            console.log('Relatório gerado via Flask:', result);
+        }
         
-        if (response.ok) {
-            console.log('Resultado da API:', result); // Debug
+        if (result.data) {
+            console.log('Resultado da API:', result);
             
             // Aplicar formato selecionado
             applyReportFormat(format, result.data);
@@ -1616,12 +2459,12 @@ async function generateReport() {
             
             showSuccess('Relatório gerado com sucesso!');
         } else {
-            throw new Error(result.detail || 'Erro ao gerar relatório');
+            throw new Error(result.error || 'Erro ao gerar relatório');
         }
         
     } catch (error) {
         console.error('Erro ao gerar relatório:', error);
-        showError('Erro ao gerar relatório. Tente novamente.');
+        showError('Erro ao gerar relatório. Verifique se há dados cadastrados e tente novamente.');
     } finally {
         hideLoading();
     }

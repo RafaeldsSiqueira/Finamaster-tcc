@@ -340,9 +340,9 @@
                                         <div id="chat-messages">
                                             <div class="ai-message">
                                                 <div class="d-flex align-items-start">
-                                                    <i class="fas fa-robot text-primary me-2 mt-1"></i>
-                                                    <div class="chat-bubble-ai p-3">
-                                                        <p class="mb-0">Olá! Sou seu assistente financeiro IA. Posso ajudar você com análises sobre suas finanças, gerar relatórios inteligentes e dar recomendações personalizadas. Como posso ajudar?</p>
+                                                    <i class="fas fa-robot me-2 mt-1" style="color: #3b82f6 !important; font-size: 1.2rem;"></i>
+                                                    <div class="chat-bubble-ai p-3" style="color: #1a202c !important; background: transparent !important; border: none !important; box-shadow: none !important;">
+                                                        <p class="mb-0" style="color: #1a202c !important;">Olá! Sou seu assistente financeiro IA. Posso ajudar você com análises sobre suas finanças, gerar relatórios inteligentes e dar recomendações personalizadas. Como posso ajudar?</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -360,6 +360,9 @@
                                     <div class="mt-3">
                                         <h6 class="text-muted mb-2">💡 Sugestões de perguntas:</h6>
                                         <div class="d-flex flex-wrap gap-2">
+                                            <button class="btn btn-sm btn-outline-info" onclick="quickChatQuestion('ajuda')" title="Ver todos os comandos disponíveis">
+                                                <i class="fas fa-question-circle"></i> Ajuda / Comandos
+                                            </button>
                                             <button class="btn btn-sm btn-outline-primary" onclick="quickChatQuestion('Qual meu saldo atual?')">
                                                 Saldo Atual
                                             </button>
@@ -385,7 +388,10 @@
                         <div class="col-md-4">
                             <div class="card">
                                 <div class="card-body">
-                                    <h5><i class="fas fa-chart-line text-success"></i> Insights Rápidos</h5>
+                                    <h5 style="color: #1a202c !important; font-weight: 600 !important;">
+                                        <i class="fas fa-chart-line" style="color: #22c55e !important; margin-right: 8px !important; font-size: 1.1rem !important; display: inline-block !important;"></i> 
+                                        <span style="color: #1a202c !important;">Insights Rápidos</span>
+                                    </h5>
                                     <div id="quick-insights">
                                         <div class="text-center">
                                             <i class="fas fa-spinner fa-spin text-muted"></i>
@@ -736,6 +742,65 @@
     
     <!-- Performance and Analytics -->
     <script>
+        // Console filter for browser extension warnings (development only)
+        // These errors are from browser extensions (Mixpanel, PIN Company Discounts, etc.)
+        // and do NOT affect your application functionality
+        (function() {
+            const originalWarn = console.warn;
+            const originalError = console.error;
+            const originalLog = console.log;
+            let filterEnabled = localStorage.getItem('FILTER_EXTENSION_WARNINGS') === 'true';
+            
+            const extensionKeywords = [
+                'Mixpanel',
+                'Do Not Track',
+                'pinComponent',
+                'chrome-extension://',
+                'PIN Company Discounts',
+                'web_accessible_resources',
+                'ERR_FAILED',
+                'Denying load',
+                'fhamhppabjaafimidmelnmpfangjdnhj',
+                'pin-32.png'
+            ];
+            
+            function shouldFilter(...args) {
+                if (!filterEnabled) return false;
+                const message = args.map(arg => String(arg || '')).join(' ');
+                return extensionKeywords.some(keyword => message.includes(keyword));
+            }
+            
+            console.warn = function(...args) {
+                if (!shouldFilter(...args)) {
+                    originalWarn.apply(console, args);
+                }
+            };
+            
+            console.error = function(...args) {
+                if (!shouldFilter(...args)) {
+                    originalError.apply(console, args);
+                }
+            };
+            
+            console.log = function(...args) {
+                if (!shouldFilter(...args)) {
+                    originalLog.apply(console, args);
+                }
+            };
+            
+            // Log filter status in development
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                console.log('%c🔧 Console Filter para Avisos de Extensões', 'color: #3b82f6; font-weight: bold; font-size: 14px;', 
+                    filterEnabled ? '✅ ATIVADO' : '❌ DESATIVADO');
+                if (!filterEnabled) {
+                    console.log('%cℹ️  Os avisos de extensões (Mixpanel, PIN Discounts) são normais e não afetam a aplicação.', 
+                        'color: #6b7280; font-size: 12px;');
+                    console.log('%c💡 Para ocultá-los: localStorage.setItem("FILTER_EXTENSION_WARNINGS", "true")', 
+                        'color: #10b981; font-size: 11px; font-weight: bold;');
+                }
+            }
+        })();
+        
         // Performance monitoring
         if ('performance' in window) {
             window.addEventListener('load', function() {

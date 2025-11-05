@@ -906,20 +906,218 @@ canvas {
 }
 
 .user-message .bg-secondary {
-  background: linear-gradient(135deg, var(--primary-500), var(--primary-600)) !important;
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+  color: #ffffff !important;
+}
+
+/* FORÇAR texto branco em TODAS as mensagens do usuário - AGRESSIVO */
+.user-message,
+.user-message *,
+.user-message .bg-secondary,
+.user-message .bg-secondary *,
+.user-message .bg-secondary p,
+.user-message .bg-secondary div,
+.user-message .bg-secondary span,
+.user-message .bg-secondary strong,
+.user-message .bg-secondary em,
+.user-message .bg-secondary li,
+.user-message .bg-secondary ul,
+.user-message .bg-secondary ol,
+.user-message .mb-0,
+.user-message .mb-0 * {
+  color: #ffffff !important;
+}
+
+/* FORÇAR ícone branco nas mensagens do usuário */
+.user-message i,
+.user-message .fas,
+.user-message .fa,
+.user-message [class*="fa-"] {
+  color: #ffffff !important;
 }
 
 .chat-bubble-ai {
-  background: #ffffff;
-  color: var(--text-secondary);
+  background: transparent !important;
+  color: #1a202c !important; /* Cor de texto clara */
   border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
-  border: 1px solid var(--border-light);
+  border: none !important;
+  box-shadow: none !important;
 }
 
-/* Deixar ícone do robô sempre com cor de destaque */
-.ai-message i.fas.fa-robot {
-  color: var(--primary-500) !important;
+/* FORÇAR texto claro em TODAS as mensagens da IA */
+.ai-message .chat-bubble-ai,
+.ai-message .chat-bubble-ai *,
+.ai-message .chat-bubble-ai p,
+.ai-message .chat-bubble-ai div,
+.ai-message .chat-bubble-ai span,
+.ai-message .chat-bubble-ai strong,
+.ai-message .chat-bubble-ai em,
+.ai-message .chat-bubble-ai li {
+  color: #1a202c !important;
+}
+
+/* FORÇAR ícone azul nas mensagens da IA */
+.ai-message i,
+.ai-message .fas,
+.ai-message .fa,
+.ai-message [class*="fa-"] {
+  color: #3b82f6 !important;
+}
+
+/* Forçar cor do texto no chat-bubble-ai - REGRAS AGRESSIVAS */
+.chat-bubble-ai,
+.chat-bubble-ai *,
+.chat-bubble-ai p,
+.chat-bubble-ai div,
+.chat-bubble-ai span,
+.chat-bubble-ai strong,
+.chat-bubble-ai em,
+.chat-bubble-ai li,
+.chat-bubble-ai ul,
+.chat-bubble-ai ol,
+.chat-bubble-ai h1,
+.chat-bubble-ai h2,
+.chat-bubble-ai h3,
+.chat-bubble-ai h4,
+.chat-bubble-ai h5,
+.chat-bubble-ai h6 {
+  color: #1a202c !important;
+}
+
+/* Forçar ícones azuis na mensagem da IA */
+.ai-message i.fas,
+.ai-message i.fa,
+.ai-message i,
+.ai-message .fas,
+.ai-message .fa,
+.ai-message [class*="fa-"] {
+  color: #3b82f6 !important;
+}
+
+/* Forçar texto branco nas mensagens do usuário */
+.user-message .bg-secondary,
+.user-message .bg-secondary *,
+.user-message .bg-secondary p,
+.user-message .bg-secondary div,
+.user-message .bg-secondary span,
+.user-message .bg-secondary strong,
+.user-message .bg-secondary em {
+  color: #ffffff !important;
+}
+
+/* Forçar ícones brancos nas mensagens do usuário */
+.user-message i.fas,
+.user-message i.fa,
+.user-message i,
+.user-message .fas,
+.user-message .fa,
+.user-message [class*="fa-"] {
+  color: #ffffff !important;
+}
+
+/* Ícones sempre coloridos - SEMPRE, mesmo quando não selecionado */
+.ai-message i.fas,
+.ai-message i.fa,
+.ai-message i {
+  color: #3b82f6 !important;
+}
+
+.user-message i.fas,
+.user-message i.fa,
+.user-message i {
+  color: #ffffff !important;
+}
+
+/* Ícone do robô sempre com cor de destaque */
+.ai-message i.fas.fa-robot,
+.ai-message i.fa-robot {
+  color: #3b82f6 !important;
+}
+
+.ai-message i.fa-user,
+.user-message i.fa-user {
+  color: #ffffff !important;
+}
+
+/* Garantir que texto das mensagens tenha cor - SEMPRE */
+.ai-message .chat-bubble-ai,
+.ai-message .chat-bubble-ai *,
+.ai-message .chat-bubble-ai p,
+.ai-message .chat-bubble-ai div,
+.ai-message .chat-bubble-ai strong,
+.ai-message .chat-bubble-ai em,
+.ai-message .chat-bubble-ai li {
+  color: #1a202c !important;
+}
+
+.user-message .bg-secondary,
+.user-message .bg-secondary *,
+.user-message .bg-secondary p,
+.user-message .bg-secondary div,
+.user-message .bg-secondary strong,
+.user-message .bg-secondary em {
+  color: #ffffff !important;
+}
+
+/* Texto das mensagens sempre visível - sobrescrever qualquer hover/focus */
+.ai-message p,
+.ai-message div.mb-0,
+.ai-message p *,
+.ai-message div * {
+  color: #1a202c !important;
+}
+
+.user-message p,
+.user-message div,
+.user-message p *,
+.user-message div * {
+  color: #ffffff !important;
+}
+
+/* Garantir que markdown/strong também tenha cor */
+.ai-message strong,
+.ai-message em,
+.ai-message li,
+.ai-message ul li {
+  color: #1a202c !important;
+}
+
+.user-message strong,
+.user-message em,
+.user-message li {
+  color: #ffffff !important;
+}
+
+/* Prevenir qualquer mudança de cor em hover/focus/active */
+.ai-message:hover i,
+.ai-message:focus i,
+.ai-message:active i,
+.ai-message:hover .chat-bubble-ai,
+.ai-message:focus .chat-bubble-ai,
+.ai-message:active .chat-bubble-ai,
+.ai-message:hover .chat-bubble-ai *,
+.ai-message:focus .chat-bubble-ai *,
+.ai-message:active .chat-bubble-ai * {
+  color: inherit !important;
+}
+
+.ai-message:hover i,
+.ai-message:focus i,
+.ai-message:active i {
+  color: #3b82f6 !important;
+}
+
+.user-message:hover i,
+.user-message:focus i,
+.user-message:active i,
+.user-message:hover .bg-secondary,
+.user-message:focus .bg-secondary,
+.user-message:active .bg-secondary,
+.user-message:hover .bg-secondary *,
+.user-message:focus .bg-secondary *,
+.user-message:active .bg-secondary * {
+  color: #ffffff !important;
 }
 
 #chat-container {
@@ -1011,10 +1209,70 @@ canvas {
 }
 
 .insight-card p {
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+/* Forçar cores dos ícones nos insights - REGRAS AGRESSIVAS */
+.insight-card i.fas,
+.insight-card i.fa,
+.insight-card i,
+.insight-card [class*="fa-"],
+.insight-card [class^="fa-"],
+.insight-card [class*=" fas"],
+.insight-card [class*=" fa"] {
+  color: #f59e0b !important;
+  display: inline-block !important;
+}
+
+.insight-card.positive i.fas,
+.insight-card.positive i.fa,
+.insight-card.positive i,
+.insight-card.positive [class*="fa-"] {
+  color: #22c55e !important;
+}
+
+.insight-card.warning i.fas,
+.insight-card.warning i.fa,
+.insight-card.warning i,
+.insight-card.warning [class*="fa-"] {
+  color: #f59e0b !important;
+}
+
+.insight-card.danger i.fas,
+.insight-card.danger i.fa,
+.insight-card.danger i,
+.insight-card.danger [class*="fa-"] {
+  color: #ef4444 !important;
+}
+
+/* Forçar cor do texto nos insights - TODOS OS ELEMENTOS */
+.insight-card,
+.insight-card *,
+.insight-card p,
+.insight-card p *,
+.insight-card span,
+.insight-card span *,
+.insight-card strong,
+.insight-card strong *,
+.insight-card em,
+.insight-card div,
+.insight-card div * {
+  color: #1a202c !important;
+}
+
+/* Garantir que ícones específicos mantenham suas cores */
+.insight-card i.fa-check-circle,
+.insight-card i.fa-exclamation-triangle,
+.insight-card i.fa-lightbulb,
+.insight-card i.fa-star,
+.insight-card i.fa-chart-pie,
+.insight-card i.fa-arrow-up,
+.insight-card i.fa-arrow-down {
+  /* Cores são definidas inline no JavaScript */
+  display: inline-block !important;
 }
 
 .insight-card ul {
@@ -1677,12 +1935,154 @@ canvas {
 .ai-danger {
   color: var(--danger-600);
 }
-// Cache buster sáb 04 out 2025 16:10:14 -03
-/* Cache buster sáb 04 out 2025 16:17:52 -03 */
-/* Cache buster sáb 04 out 2025 16:20:47 -03 */
-/* Cache buster sáb 04 out 2025 16:23:46 -03 */
-/* Cache buster sáb 04 out 2025 16:25:03 -03 */
-/* Cache buster sáb 04 out 2025 16:29:56 -03 */
-/* Cache buster sáb 04 out 2025 16:38:52 -03 */
-/* Cache buster sáb 04 out 2025 16:40:09 -03 */
-/* Cache buster sáb 04 out 2025 16:41:41 -03 */
+
+/* ========== BUSCA NA PÁGINA (CTRL+F) ========== */
+
+#page-search-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(20px);
+    border-bottom: 2px solid var(--primary-500);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+    padding: var(--space-4);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.page-search-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.page-search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: rgba(30, 41, 59, 0.8);
+    border: 2px solid var(--primary-500);
+    border-radius: var(--radius-xl);
+    padding: var(--space-3) var(--space-4);
+}
+
+.page-search-input-wrapper i.fa-search {
+    color: var(--primary-400);
+    font-size: 1.1rem;
+}
+
+.page-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 0;
+}
+
+.page-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.page-search-info {
+    display: flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+    padding: 0 var(--space-3);
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    min-width: 100px;
+}
+
+.page-search-info span {
+    font-weight: 600;
+    color: var(--primary-400);
+    margin-right: 4px;
+}
+
+.page-search-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+}
+
+.page-search-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #ffffff;
+    transform: scale(1.1);
+}
+
+.page-search-btn:active {
+    transform: scale(0.95);
+}
+
+.page-search-btn i {
+    font-size: 0.9rem;
+}
+
+.page-search-highlight {
+    background: rgba(255, 255, 0, 0.3);
+    color: inherit;
+    padding: 2px 0;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+.page-search-highlight-active {
+    background: rgba(255, 255, 0, 0.6) !important;
+    box-shadow: 0 0 0 2px var(--primary-500);
+    animation: pulseHighlight 1s ease infinite;
+}
+
+@keyframes pulseHighlight {
+    0%, 100% {
+        box-shadow: 0 0 0 2px var(--primary-500);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5);
+    }
+}
+
+@media (max-width: 768px) {
+    #page-search-bar {
+        padding: var(--space-3);
+    }
+    
+    .page-search-input-wrapper {
+        padding: var(--space-2) var(--space-3);
+    }
+    
+    .page-search-info {
+        display: none;
+    }
+    
+    .page-search-btn {
+        width: 32px;
+        height: 32px;
+        padding: var(--space-1);
+    }
+}

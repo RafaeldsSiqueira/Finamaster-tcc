@@ -4,19 +4,51 @@ Sistema completo de gestão financeira desenvolvido em Python com Flask para o T
 
 ## 📊 **Base de Dados**
 
-- **Tipo**: **SQLite** - Banco de dados local embarcado
-- **Localização**: `instance/finanmaster.db`
+- **Tipo**: **MySQL** - Banco de dados relacional profissional
+- **Configuração**: Via variáveis de ambiente (arquivo `.env`)
 - **Vantagens**: 
-  - Simples e leve
-  - Não requer servidor separado
-  - Ideal para desenvolvimento e demonstração
-  - Backup automático incluído
+  - Performance superior e escalável
+  - Suporte a múltiplos usuários simultâneos
+  - Recursos avançados de integridade e transações
+  - Pool de conexões otimizado
+  - Ideal para produção
 - **Modelos**:
+  - `User` - Usuários do sistema
   - `Transaction` - Transações financeiras (receitas/despesas)
   - `Goal` - Metas financeiras
   - `Budget` - Orçamentos mensais por categoria
 
-## 💻 **Tecnologias Utilizadas**
+📖 **Documentação completa do MySQL**: Veja `documentacao/MYSQL_SETUP.md`
+
+## 👤 **Usuário de Demonstração**
+
+O projeto inclui um **usuário de demonstração** pré-configurado para facilitar testes e apresentações:
+
+### **Credenciais:**
+- **Email**: `demo@finanmaster.com`
+- **Senha**: `demo123`
+- **Username**: `demo`
+
+### **Dados Incluídos:**
+O usuário demo vem com dados de exemplo pré-populados:
+- ✅ **7 transações** (receitas e despesas variadas)
+- ✅ **3 metas financeiras** com progresso
+- ✅ **5 categorias de orçamento** configuradas
+
+### **Como Verificar:**
+O usuário demo é criado automaticamente ao executar `python3 setup_mysql.py` ou `python3 init_mysql.py`. Para verificar se está ativo:
+
+```bash
+# Verificar via Python
+python -c "from app import app, db, User; app.app_context().push(); u = User.query.filter_by(email='demo@finanmaster.com').first(); print(f'✅ Demo: {u.username if u else \"não encontrado\"}')"
+```
+
+Ou através do MySQL:
+```sql
+SELECT id, username, email FROM users WHERE email = 'demo@finanmaster.com';
+```
+
+## �� **Tecnologias Utilizadas**
 
 ### **Backend**
 - **Python 3.8+** com Flask e SQLAlchemy
@@ -79,25 +111,48 @@ Sistema completo de gestão financeira desenvolvido em Python com Flask para o T
 
 ## 🚀 **Como Executar Localmente**
 
-### **Opção 1: Menu Interativo (Recomendado)**
+### **Pré-requisitos:**
+1. **MySQL instalado e rodando**
+2. **Arquivo `.env` configurado** (copie `.env.example` para `.env`)
+
+### **Passo 1: Configurar e Inicializar Banco de Dados**
+
+**Opção A - Automática (Recomendada):**
+```bash
+# Script interativo que configura tudo automaticamente
+python3 setup_mysql.py
+```
+
+**Opção B - Manual:**
+```bash
+# 1. Configure o arquivo .env com a senha do MySQL
+nano .env
+
+# 2. Execute o script de inicialização
+python3 init_mysql.py
+```
+
+### **Passo 2: Executar Aplicação**
+
+**Opção 1: Menu Interativo (Recomendado)**
 ```bash
 cd instance
 ./finanmaster.sh
 ```
 
-### **Opção 2: Sistema Completo com IA**
+**Opção 2: Sistema Completo com IA**
 ```bash
 cd instance
 ./scripts/start_with_ai.sh
 ```
 
-### **Opção 3: Sistema Básico**
+**Opção 3: Sistema Básico**
 ```bash
 cd instance
 ./scripts/run.sh
 ```
 
-### **Opção 4: Manual**
+**Opção 4: Manual**
 ```bash
 # Ativar ambiente virtual
 source venv/bin/activate
