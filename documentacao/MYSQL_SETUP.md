@@ -303,29 +303,34 @@ with app.app_context():
 
 ---
 
-## 📦 **Migração do SQLite para MySQL**
+## 📦 **Migração de Dados**
 
-Se você estava usando SQLite e precisa migrar dados:
+> **Nota:** O FinanMaster utiliza **MySQL** como banco de dados principal. O sistema foi completamente migrado do SQLite para MySQL.
+
+### **Se você tinha dados em SQLite (versões antigas):**
+
+Se você estava usando uma versão antiga do projeto com SQLite e precisa migrar dados existentes:
 
 ### **Método Manual:**
 
 1. **Exportar dados do SQLite:**
    ```bash
-   sqlite3 finanmaster.db .dump > backup.sql
+   sqlite3 instance/finanmaster.db .dump > backup.sql
    ```
 
 2. **Adaptar queries para MySQL:**
    - Remover comandos SQLite específicos
-   - Ajustar tipos de dados se necessário
+   - Converter tipos de dados (TEXT → VARCHAR, INTEGER → INT, etc.)
+   - Ajustar sintaxe de data/hora
 
 3. **Importar no MySQL:**
    ```bash
    mysql -u root -p finanmaster < backup.sql
    ```
 
-### **Método via Script (Recomendado):**
+### **Recomendação:**
 
-Crie um script personalizado para migrar dados específicos do seu projeto.
+Para novos projetos ou instalações, **não é necessária migração**. Basta executar o `setup_mysql.py` e `init_mysql.py` conforme descrito nesta documentação.
 
 ---
 

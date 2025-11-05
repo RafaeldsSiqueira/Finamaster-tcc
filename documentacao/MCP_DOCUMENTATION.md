@@ -29,7 +29,7 @@ O FinanMaster MCP (Model Context Protocol) é um sistema de inteligência artifi
 ### Servidor MCP (FastAPI)
 - **Porta**: 8000
 - **Framework**: FastAPI
-- **Banco de Dados**: SQLite (mesmo do FinanMaster)
+- **Banco de Dados**: MySQL (mesmo do FinanMaster)
 - **Análise de Dados**: Pandas + NumPy
 
 ### Integração com Frontend

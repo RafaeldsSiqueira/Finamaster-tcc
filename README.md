@@ -61,7 +61,7 @@ cd documentacao/
 - ✅ **app.py**: Aplicação Flask completa com banco de dados
 - ✅ **templates/**: Interface HTML moderna
 - ✅ **static/**: CSS, JavaScript e assets
-- ✅ **instance/**: Banco SQLite e configurações
+- ✅ **instance/**: Configurações e servidor MCP
 - ✅ **Scripts**: Inicialização e deploy
 
 ### **📂 documentacao/**

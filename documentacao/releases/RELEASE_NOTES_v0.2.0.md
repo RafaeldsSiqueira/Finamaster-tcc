@@ -19,11 +19,11 @@
   - Ação `navigate_to_section` no front.
 
 ## Mudanças
-- SQLite agora usa caminho absoluto em `instance/finanmaster.db`, evitando “unable to open database file”.
+- Sistema migrado para MySQL como banco de dados principal (substituindo SQLite).
 - Front envia `user_id` ao MCP em:
   - `POST ${MCP_API_BASE}/ai/analyze`
   - `POST ${MCP_API_BASE}/reports/generate`
-- MCP usa o mesmo DB (`instance/finanmaster.db`) e filtra por `user_id` em `/ai/analyze`, `/ai/chat` e `/reports/generate`.
+- MCP usa o mesmo MySQL e filtra por `user_id` em `/ai/analyze`, `/ai/chat` e `/reports/generate`.
 - Insights rápidos exibem aviso “Sem dados no período…” quando listas vazias.
 - Busca de transações em tempo real (campo de pesquisa e filtros).
 
@@ -34,8 +34,9 @@
 
 ## Passos de atualização
 1. Banco de dados
-   - Garanta que o arquivo está em `instance/finanmaster.db`. Se necessário:
-     mv finanmaster.db instance/finanmaster.db
+   - Configure o MySQL seguindo `documentacao/MYSQL_SETUP.md`
+   - Execute `python3 setup_mysql.py` para configurar a conexão
+   - Execute `python3 init_mysql.py` para criar o banco e dados de demonstração
 2. Dependências (em venv):
    source venv/bin/activate
    pip install -r requirements.txt

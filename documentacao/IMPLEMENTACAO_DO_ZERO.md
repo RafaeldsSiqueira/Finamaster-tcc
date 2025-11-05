@@ -20,7 +20,7 @@ Este guia completo te ensina como implementar o FinanMaster do zero, desde a con
 - **Backend**: Python + Flask + SQLAlchemy
 - **Frontend**: HTML5 + CSS3 + JavaScript + Bootstrap
 - **IA**: FastAPI + Pandas + NumPy
-- **Banco**: SQLite (desenvolvimento) / PostgreSQL (produção)
+- **Banco**: MySQL (desenvolvimento e produção)
 - **Deploy**: Oracle Cloud Free Tier
 
 ---
@@ -106,7 +106,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///finanmaster.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://user:password@localhost:3306/finanmaster')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -951,8 +951,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import sqlite3
+import pymysql
 import json
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = FastAPI(title="FinanMaster MCP", version="1.0.0")
 
@@ -964,8 +969,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Configuração MySQL
+DB_USER = os.getenv('DB_USER', 'root')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '')
+DB_HOST = os.getenv('DB_HOST', 'localhost')
+DB_PORT = int(os.getenv('DB_PORT', '3306'))
+DB_NAME = os.getenv('DB_NAME', 'finanmaster')
+
 def get_db_connection():
-    return sqlite3.connect('instance/finanmaster.db')
+    return pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        charset='utf8mb4'
+    )
 
 @app.get("/")
 async def root():
@@ -989,12 +1008,12 @@ async def generate_report(request_data: dict):
         
         # Filtros por período
         if period == 'current_month':
-            query += " AND date >= date('now', 'start of month')"
+            query += " AND DATE_FORMAT(date, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m')"
         elif period == 'last_3_months':
-            query += " AND date >= date('now', '-3 months')"
+            query += " AND date >= DATE_SUB(NOW(), INTERVAL 3 MONTH)"
         
         # Executar query
-        df = pd.read_sql_query(query, conn)
+        df = pd.read_sql(query, conn)
         conn.close()
         
         if df.empty:
@@ -1043,7 +1062,7 @@ async def chat_message(message_data: dict):
         # Análise simples da mensagem
         if 'saldo' in message.lower():
             conn = get_db_connection()
-            df = pd.read_sql_query(
+            df = pd.read_sql(
                 "SELECT * FROM transaction WHERE user_id = 1", conn
             )
             conn.close()
@@ -1060,7 +1079,7 @@ async def chat_message(message_data: dict):
         
         elif 'gastos' in message.lower() or 'despesas' in message.lower():
             conn = get_db_connection()
-            df = pd.read_sql_query(
+            df = pd.read_sql(
                 "SELECT * FROM transaction WHERE user_id = 1 AND transaction_type = 'Despesa'", 
                 conn
             )
@@ -1232,7 +1251,7 @@ df -h
 Após seguir este guia, você terá:
 
 ### ✅ **Sistema Completo:**
-- **Backend Flask** com banco SQLite
+- **Backend Flask** com banco MySQL
 - **Frontend moderno** responsivo
 - **IA integrada** com FastAPI
 - **Deploy em produção** na Oracle Cloud

@@ -230,10 +230,19 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### **6.3 Configurar SQLite**
+### **6.3 Configurar MySQL**
 ```bash
-# O SQLite será criado automaticamente
-# Mas vamos configurar permissões:
+# Instalar MySQL se necessário
+sudo apt update
+sudo apt install mysql-server -y
+
+# Configurar MySQL
+sudo mysql_secure_installation
+
+# Executar setup MySQL
+python3 setup_mysql.py
+
+# Configurar permissões:
 sudo chown ubuntu:ubuntu /home/ubuntu/finanmaster-tcc
 chmod 755 /home/ubuntu/finanmaster-tcc
 ```
@@ -424,19 +433,26 @@ nano /home/ubuntu/backup_finanmaster.sh
 
 DATE=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="/home/ubuntu/backups"
-DB_FILE="/home/ubuntu/finanmaster-tcc/finanmaster.db"
+DB_NAME="finanmaster"
+DB_USER="root"
+DB_PASSWORD=""  # Configurar conforme .env
+
+# Carregar variáveis do .env se existir
+if [ -f /home/ubuntu/finanmaster-tcc/.env ]; then
+    source /home/ubuntu/finanmaster-tcc/.env
+fi
 
 # Criar diretório de backup
 mkdir -p $BACKUP_DIR
 
 # Backup do banco de dados
-cp $DB_FILE $BACKUP_DIR/finanmaster_$DATE.db
+mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > $BACKUP_DIR/finanmaster_$DATE.sql
 
 # Backup do código
 tar -czf $BACKUP_DIR/finanmaster_code_$DATE.tar.gz /home/ubuntu/finanmaster-tcc/
 
 # Manter apenas últimos 7 backups
-find $BACKUP_DIR -name "*.db" -mtime +7 -delete
+find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
 find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
 
 echo "Backup realizado: $DATE"
@@ -547,7 +563,7 @@ sudo tail -f /var/log/nginx/finanmaster_access.log
 ### **Backup Manual**
 ```bash
 # Backup do banco:
-cp /home/ubuntu/finanmaster-tcc/finanmaster.db /home/ubuntu/backup_manual.db
+mysqldump -u $DB_USER -p$DB_PASSWORD $DB_NAME > /home/ubuntu/backup_manual_$(date +%Y%m%d_%H%M%S).sql
 
 # Backup completo:
 tar -czf /home/ubuntu/backup_completo.tar.gz /home/ubuntu/finanmaster-tcc/

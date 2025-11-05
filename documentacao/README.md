@@ -295,9 +295,8 @@ cd instance
 finanmaster-tcc/
 ├── instance/                 # Aplicação principal
 │   ├── app.py               # Flask principal
-│   ├── mcp_server.py        # Servidor IA
-│   ├── requirements.txt     # Dependências
-│   ├── finanmaster.db       # Banco de dados SQLite
+│   ├── mcp_server.py        # Servidor IA (FastAPI)
+│   └── requirements.txt     # Dependências
 │   ├── finanmaster.sh       # Menu interativo
 │   └── scripts/             # Scripts de execução
 │       ├── run.sh           # Sistema básico
